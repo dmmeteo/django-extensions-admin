@@ -2,8 +2,13 @@
 
 from django.contrib import admin
 
+from django_extensions_admin import (
+    DateRangeFilter,
+    DateTimeRangeFilter,
+    NumericRangeFilter,
+    readonly_json,
+)
 from django_extensions_admin import admin as extensions_admin
-from django_extensions_admin import readonly_json
 
 from .models import Device, Reading
 
@@ -17,8 +22,9 @@ class ReadingInline(admin.TabularInline):
 
 @admin.register(Device)
 class DeviceAdmin(extensions_admin.ButtonsMixin, admin.ModelAdmin):
-    list_display = ("name", "region", "status", "archived")
-    list_filter = ("region", "status", "archived")
+    list_display = ("name", "region", "status", "archived", "last_seen_at")
+    # A date range over a DateTimeField column: whole days, read in the active timezone.
+    list_filter = ("region", "status", "archived", ("last_seen_at", DateRangeFilter))
     search_fields = ("name",)
     list_editable = ("status",)
     actions = ["mark_archived"]
@@ -90,7 +96,18 @@ class DeviceAdmin(extensions_admin.ButtonsMixin, admin.ModelAdmin):
 
 @admin.register(Reading)
 class ReadingAdmin(admin.ModelAdmin):
-    """No mixin and no widget configuration: the project-wide opt-in reaches it anyway."""
+    """No mixin and no widget configuration: the project-wide opt-in reaches it anyway.
 
-    list_display = ("__str__", "device", "label")
-    list_filter = ("device",)
+    The three range filters are ordinary ``list_filter`` entries alongside a plain one.
+    ``recorded_on`` is a date column and ``recorded_at`` an instant, so they get the two
+    different date filters - the first means whole days, the second means minutes.
+    """
+
+    list_display = ("__str__", "device", "label", "recorded_on", "recorded_at", "value")
+    list_filter = (
+        ("recorded_on", DateRangeFilter),
+        ("recorded_at", DateTimeRangeFilter),
+        ("value", NumericRangeFilter),
+        "device",
+    )
+    search_fields = ("label",)

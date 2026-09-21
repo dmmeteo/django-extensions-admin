@@ -10,6 +10,7 @@ class Device(models.Model):
     archived = models.BooleanField(default=False)
     config = models.JSONField(default=dict, blank=True)
     last_report = models.JSONField(null=True, blank=True, help_text="Rendered read-only.")
+    last_seen_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ("pk",)
@@ -23,6 +24,9 @@ class Reading(models.Model):
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name="readings")
     label = models.CharField(max_length=100, blank=True)
     payload = models.JSONField(default=dict, blank=True)
+    recorded_on = models.DateField(null=True, blank=True)
+    recorded_at = models.DateTimeField(null=True, blank=True)
+    value = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
 
     class Meta:
         ordering = ("pk",)

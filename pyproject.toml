@@ -25,7 +25,9 @@ classifiers = [
 dependencies = ["Django>=5.2,<7"]
 
 [project.urls]
-Homepage = "https://example.invalid/django-extensions-admin"
+Homepage = "https://github.com/dmmeteo/django-extensions-admin"
+Source = "https://github.com/dmmeteo/django-extensions-admin"
+Issues = "https://github.com/dmmeteo/django-extensions-admin/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/django_extensions_admin"]

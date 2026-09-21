@@ -6,7 +6,7 @@ step, no runtime dependency beyond Django.
 
 > **Independent project.** Inspired by the spirit of `django-extensions`, but not
 > official, not affiliated with it, and it does not depend on it. The name is
-> provisional and nothing has been published anywhere.
+> provisional and the package is not published on any package index.
 
 ## Philosophy
 
@@ -19,7 +19,13 @@ experience come before breadth of features.
 
 ## Install
 
-Local, unpublished. Build the wheel and install it:
+Not on PyPI. Install from the repository:
+
+```bash
+uv pip install "git+https://github.com/dmmeteo/django-extensions-admin"
+```
+
+Or build the wheel from a checkout:
 
 ```bash
 uv build --wheel                      # -> dist/django_extensions_admin-0.1.0-py3-none-any.whl
@@ -259,6 +265,10 @@ bash scripts/verify.sh
 Lint (Ruff + `node --check`), naming check, wheel build with an asset manifest check, a
 clean-install import smoke from the wheel, the test suite on both supported Django
 versions, and the headless-browser smoke with screenshots into `artifacts/`.
+
+GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the part of
+that gate which is reliable on a hosted Linux runner: lint and the test suite on Django 5.2
+and 6.0. The wheel/install smoke and the browser smoke stay local.
 
 ## Tested versions
 

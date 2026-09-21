@@ -1,0 +1,43 @@
+name: CI
+
+# The part of scripts/verify.sh that runs reliably on a GitHub-hosted Linux runner:
+# lint and the Django test matrix. The wheel/install smoke and the headless-browser
+# smoke stay in scripts/verify.sh and are run locally.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: uvx ruff@0.14.14 check .
+      - run: uvx ruff@0.14.14 format --check .
+      - run: find src -name '*.js' -exec node --check {} +
+
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        django: ["5.2.*", "6.0.*"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Run the test suite on Django ${{ matrix.django }}
+        env:
+          PYTHONPATH: src
+        run: >-
+          uv run --no-project --python 3.13
+          --with "django==${{ matrix.django }}"
+          python tests/runtests.py tests

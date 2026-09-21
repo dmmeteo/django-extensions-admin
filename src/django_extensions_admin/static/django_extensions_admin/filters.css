@@ -1,0 +1,72 @@
+/* Range filters look like the rest of the filter sidebar: the admin's own variables, its
+   spacing, its narrow column. Without this file the form is still a usable pair of inputs
+   and a button - only the fit is lost. */
+
+.admin-ext-range {
+    margin: 0;
+    padding: 0 0 8px 15px;
+}
+
+.admin-ext-range-bound {
+    margin: 0 0 6px;
+}
+
+.admin-ext-range-bound label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--body-quiet-color, #666);
+    margin-bottom: 2px;
+}
+
+.admin-ext-range input[type="date"],
+.admin-ext-range input[type="datetime-local"],
+.admin-ext-range input[type="number"],
+.admin-ext-range input[type="text"] {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 14rem;
+    padding: 3px 6px;
+    font-family: inherit;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: var(--body-fg, #333);
+    background: var(--body-bg, #fff);
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 4px;
+}
+
+.admin-ext-range-error {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.75rem;
+    color: var(--error-fg, #ba2121);
+}
+
+.admin-ext-range-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0 0;
+}
+
+.admin-ext-range-apply {
+    font-family: inherit;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    padding: 4px 10px;
+    cursor: pointer;
+    border: 1px solid var(--button-bg, #79aec8);
+    border-radius: 4px;
+    background: var(--button-bg, #79aec8);
+    color: var(--button-fg, #fff);
+}
+
+.admin-ext-range-apply:hover,
+.admin-ext-range-apply:focus {
+    background: var(--button-hover-bg, #609ab6);
+    border-color: var(--button-hover-bg, #609ab6);
+}
+
+.admin-ext-range-clear {
+    font-size: 0.75rem;
+}

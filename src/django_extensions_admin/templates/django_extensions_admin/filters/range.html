@@ -1,0 +1,36 @@
+{% load i18n static %}
+{% comment %}
+A filter that is a form rather than a list of links. The <details>/<summary> shell and its
+data-filter-title are the stock admin/filter.html markup, so the sidebar keeps its own
+behaviour and the heading reads like every other filter; only the body differs.
+
+The stylesheet is linked here because a ListFilter has no media hook - the changelist
+collects media from the ModelAdmin, not from its filters. Two range filters on one page
+emit the same link twice, which the browser fetches once; that is cheaper than carrying
+per-request state to render it only once.
+{% endcomment %}
+<link rel="stylesheet" href="{% static 'django_extensions_admin/filters.css' %}">
+<details data-filter-title="{{ title }}" open>
+  <summary>
+    {% blocktranslate with filter_title=title %} By {{ filter_title }} {% endblocktranslate %}
+  </summary>
+  {% for choice in choices %}
+  <form class="admin-ext-range" method="get" action="">
+    {% for name, value in choice.carried_params %}<input type="hidden" name="{{ name }}" value="{{ value }}">
+    {% endfor %}
+    {% for bound in choice.form %}
+    <p class="admin-ext-range-bound">
+      <label for="{{ bound.id_for_label }}">{{ bound.label }}</label>
+      {{ bound }}
+      {% for error in bound.errors %}<span class="admin-ext-range-error">{{ error }}</span>{% endfor %}
+    </p>
+    {% endfor %}
+    {% for error in choice.form.non_field_errors %}<p class="admin-ext-range-error">{{ error }}</p>
+    {% endfor %}
+    <p class="admin-ext-range-actions">
+      <button type="submit" class="admin-ext-range-apply">{% translate "Apply" %}</button>
+      {% if choice.is_active %}<a class="admin-ext-range-clear" href="{{ choice.clear_url|iriencode }}">{% translate "Clear" %}</a>{% endif %}
+    </p>
+  </form>
+  {% endfor %}
+</details>

@@ -3,7 +3,14 @@
 from django.contrib import admin
 from django.db import models
 
-from django_extensions_admin import JSONReadonlyMixin, PrettyJSONWidget, readonly_json
+from django_extensions_admin import (
+    DateRangeFilter,
+    DateTimeRangeFilter,
+    JSONReadonlyMixin,
+    NumericRangeFilter,
+    PrettyJSONWidget,
+    readonly_json,
+)
 from django_extensions_admin import admin as extensions_admin
 
 from .models import Device, Reading
@@ -116,10 +123,47 @@ guarded_site.register(Device, GuardedDeviceAdmin)
 
 
 class PlainReadingAdmin(admin.ModelAdmin):
-    """No mixin, no widget override: used for the project-wide opt-in tests."""
+    """No mixin and no widget override: the project-wide JSON opt-in and the range filters.
+
+    Range filters are plain ``list_filter`` entries, so this admin needs nothing else -
+    not the buttons mixin, not a custom template, not a setting.
+    """
+
+    list_display = ("id", "device", "recorded_on", "recorded_at", "value", "sequence")
+    list_filter = (
+        ("recorded_on", DateRangeFilter),
+        ("recorded_at", DateRangeFilter),
+        ("value", NumericRangeFilter),
+        ("sequence", NumericRangeFilter),
+        "device__region",
+    )
+    search_fields = ("device__name",)
 
 
 admin.site.register(Reading, PlainReadingAdmin)
+
+
+class InstantReadingAdmin(admin.ModelAdmin):
+    """The same field, filtered to the minute instead of to the day."""
+
+    list_filter = (("recorded_at", DateTimeRangeFilter),)
+
+
+instant_site = admin.AdminSite(name="instant")
+instant_site.register(Reading, InstantReadingAdmin)
+
+
+class RecentReadingAdmin(admin.ModelAdmin):
+    """An admin that hides rows: the range filter may only narrow what this returns."""
+
+    list_filter = (("value", NumericRangeFilter),)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(sequence__gte=3)
+
+
+recent_site = admin.AdminSite(name="recent")
+recent_site.register(Reading, RecentReadingAdmin)
 
 
 class ReadonlyOnlyDeviceAdmin(JSONReadonlyMixin, admin.ModelAdmin):

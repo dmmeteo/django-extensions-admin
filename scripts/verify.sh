@@ -98,11 +98,13 @@ required = [
     "django_extensions_admin/static/django_extensions_admin/json-widget.css",
     "django_extensions_admin/static/django_extensions_admin/json-widget.js",
     "django_extensions_admin/static/django_extensions_admin/buttons.css",
+    "django_extensions_admin/static/django_extensions_admin/filters.css",
     "django_extensions_admin/templates/django_extensions_admin/change_list.html",
     "django_extensions_admin/templates/django_extensions_admin/change_form.html",
     "django_extensions_admin/templates/django_extensions_admin/buttons/toolbar.html",
     "django_extensions_admin/templates/django_extensions_admin/buttons/action_form.html",
     "django_extensions_admin/templates/django_extensions_admin/buttons/confirm.html",
+    "django_extensions_admin/templates/django_extensions_admin/filters/range.html",
 ]
 missing = [name for name in required if name not in names]
 print("\n".join(sorted(names)))
@@ -149,10 +151,12 @@ django.setup()
 
 import django_extensions_admin as pkg
 from django_extensions_admin import ButtonsMixin, JSONReadonlyMixin, PrettyJSONWidget, button
+from django_extensions_admin import DateRangeFilter, DateTimeRangeFilter, NumericRangeFilter
 from django_extensions_admin import admin as extensions_admin
 from django_extensions_admin import readonly_json, render_json
 
 assert (extensions_admin.button, extensions_admin.ButtonsMixin) == (button, ButtonsMixin)
+assert extensions_admin.DateRangeFilter is DateRangeFilter
 # Read-only JSON brings its own stylesheet, with no editable widget and no buttons.
 assert JSONReadonlyMixin.Media.css == {"all": ("django_extensions_admin/json-widget.css",)}
 assert callable(readonly_json("payload"))
@@ -163,8 +167,10 @@ for rel in (
     "static/django_extensions_admin/json-widget.css",
     "static/django_extensions_admin/json-widget.js",
     "static/django_extensions_admin/buttons.css",
+    "static/django_extensions_admin/filters.css",
     "templates/django_extensions_admin/change_list.html",
     "templates/django_extensions_admin/buttons/confirm.html",
+    "templates/django_extensions_admin/filters/range.html",
 ):
     assert (root / rel).is_file(), f"missing from the installed package: {rel}"
 
@@ -176,6 +182,10 @@ get_template("django_extensions_admin/buttons/confirm.html")
 # Rendering keeps integers JavaScript cannot hold; Python's are arbitrary precision.
 assert "9007199254740993" in PrettyJSONWidget().format_value('{"n": 9007199254740993}')
 assert "admin-ext-json-key" in render_json({"n": 1})
+# Range filters are plain list_filter entries: no mixin, no setting, no registration.
+for filter_class in (DateRangeFilter, DateTimeRangeFilter, NumericRangeFilter):
+    assert filter_class.template == "django_extensions_admin/filters/range.html"
+get_template("django_extensions_admin/filters/range.html")
 print(f"import smoke OK: django_extensions_admin {pkg.__version__} from {root}")
 PY
 ) | tee "$ART/smoke-install.txt"

@@ -189,13 +189,26 @@ An admin that declares its own JSONField widget always wins over the project-wid
 Read-only rendering, in the same restrained style:
 
 ```python
-from django_extensions_admin import readonly_json
+from django_extensions_admin import JSONReadonlyMixin, readonly_json
 
-class DeviceAdmin(admin.ModelAdmin):
+class DeviceAdmin(JSONReadonlyMixin, admin.ModelAdmin):
     readonly_fields = ("last_report_pretty",)
     exclude = ("last_report",)
     last_report_pretty = readonly_json("last_report", short_description="Last report")
 ```
+
+Django collects widget assets from *editable* fields, so an admin that shows JSON only
+read-only has to ask for the stylesheet itself. `JSONReadonlyMixin` is that request and
+nothing else - the plain-Django equivalent, if you prefer no import, is:
+
+```python
+class Media:
+    css = {"all": ("django_extensions_admin/json-widget.css",)}
+```
+
+An admin that also has an editable JSON field already has the stylesheet, and without it
+the output is still a perfectly readable `<pre>` - only the colours are missing. Read-only
+JSON needs neither `PrettyJSONWidget` nor the buttons mixin.
 
 ### Settings
 
@@ -214,17 +227,28 @@ Indents the stored value on render, highlights keys/strings/numbers/literals, gr
 its content, validates as you type and marks the character the parser choked on. A
 **Format** button re-indents on demand; there is no automatic rewrite unless you opt in.
 
-### Fidelity: text vs. saving — read this
+### Fidelity: what is preserved, and where
 
-Re-indenting is **whitespace-only**. The formatter (in Python and in JavaScript) never
-parses JSON into objects and back: every string and number literal is copied byte for byte.
-So `9007199254740993`, `1.0E2`, `-0.0`, duplicate keys and key order all survive
-re-indentation and the Format button unchanged. `JSON.parse`/`JSON.stringify` would not.
+Three different things happen to your JSON, and only one of them is ours:
 
-**This guarantee covers the text in the editor, not a save.** Saving goes through
-`forms.JSONField` and your database, which parse and re-serialise the value with their own
-semantics: duplicate keys collapse to the last one, and numbers become whatever Python and
-your database column do with them. The widget does not change that and does not claim to.
+- **Rendering (server).** The widget re-indents with `json.loads`/`json.dumps` from the
+  standard library. That is not where fidelity is lost: Django's own `forms.JSONField` has
+  already run exactly that round trip - `bound_data()` parses the submitted text and
+  `prepare_value()` dumps it again - before the widget sees anything. Large integers such as
+  `9007199254740993` survive, because Python's integers are arbitrary precision. `1.0E2`
+  arrives as `100.0` and duplicate keys have already collapsed; Django did that, not the
+  widget.
+- **The Format button (browser).** Whitespace-only. The script rewrites the indentation
+  between tokens and copies every string and number literal through byte for byte, so
+  `9007199254740993`, `1.0E2`, `-0.0`, duplicate keys and key order all survive it. This is
+  the case that matters, because it acts on text you just typed and have not sent anywhere:
+  `JSON.parse`/`JSON.stringify` would have produced `9007199254740992` and `100`. Validity is
+  decided by the browser's own `JSON.parse`; the re-indenter carries no JSON grammar of its
+  own and only runs on text the parser has accepted.
+- **Saving.** Goes through `forms.JSONField` and your database, which parse and re-serialise
+  the value with their own semantics: duplicate keys collapse to the last one, and numbers
+  become whatever Python and your column do with them. The widget does not change that and
+  does not claim to.
 
 Invalid input is never rewritten or discarded: text that does not parse is redisplayed
 exactly as typed, so a failed save hands your own JSON back to you.
@@ -237,6 +261,8 @@ exactly as typed, so a failed save hands your own JSON back to you.
   stays readable.
 - **Oversized value or a highlighting error**: the field drops to plain mode - the
   textarea's own colours come back. The worst case is losing the colours, never the text.
+- **Read-only fields**: plain `<pre>` markup rendered on the server, with no JavaScript
+  involved at all; without the stylesheet it loses the colours, not the text.
 
 Each of these is asserted in the browser tests, not assumed.
 

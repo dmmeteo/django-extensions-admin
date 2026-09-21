@@ -11,10 +11,12 @@ and are simply not in this release.
 
 The proposed module boundaries and bounded implementation waves are in
 [ARCHITECTURE.md](ARCHITECTURE.md). They are planning, not implemented features or
-a dispatched batch. Independent Django-like buttons are done and are described in the
-[README](README.md); the next outcome is the JSON simplification.
+a dispatched batch. Independent Django-like buttons and the simplified JSON widget are done
+and are described in the [README](README.md); the next outcome is the first consumer pilot.
 
-- **JSON simplification** - keep the Fabriq-style thin Python widget + JS/CSS approach; reduce custom parsing while preserving invalid input, large-number safety in browser formatting, and usable fallbacks. See ARCHITECTURE.md for the proposed responsibility split.
+- **First consumer pilot** - install the wheel in the user's application, integrate one
+  button and one JSON field, and record the integration friction. This feedback may reorder
+  everything below.
 - **Execution and styling design** - apply the accepted requirements and evaluate the native Django Tasks backend approach in [actions-and-task-execution.md](docs/decisions/actions-and-task-execution.md). Backend integrations remain unverified; customization must preserve stock-admin-dependent widgets and extensions.
 
 - **Filters** - usable date and numeric ranges, searchable/dropdown/multi-value choices.

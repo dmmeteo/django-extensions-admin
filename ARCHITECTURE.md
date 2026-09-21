@@ -1,6 +1,6 @@
 # Architecture proposal
 
-Status: architecture direction accepted by the user, including the independent `admin.button` API with `changelist_buttons`, `changeform_buttons` and `row_buttons`, and the simpler Fabriq-style JSON widget direction. Local decomposition remains revisable; backend/REPL questions below remain open. This is not a description of shipped features or authorization to implement the entire roadmap. Approval reference: Discord message 1551266173528703077.
+Status: architecture direction accepted by the user, including the independent `admin.button` API with `changelist_buttons`, `changeform_buttons` and `row_buttons`, and the simpler Fabriq-style JSON widget direction. Both are now implemented; the JSON simplification below describes shipped behavior. Local decomposition remains revisable; backend/REPL questions below remain open. This is not a description of shipped features or authorization to implement the entire roadmap. Approval reference: Discord message 1551266173528703077.
 
 Scope: django-extensions-admin, the reusable library. The user's upcoming application is its first consumer, not the subject of this architecture. Its repository and requirements are not yet supplied.
 
@@ -20,7 +20,6 @@ src/django_extensions_admin/
 │   ├── mixins.py
 │   └── views.py
 ├── jsonwidget/
-│   ├── formatter.py
 │   ├── widgets.py
 │   └── readonly.py
 ├── templates/django_extensions_admin/
@@ -31,7 +30,7 @@ browser_tests/
 scripts/
 ```
 
-Keep the working slices, but simplify mechanisms that exceed the product need. Buttons should have an independent, Django-like API rather than be registered as bulk actions. The existing Python formatter is a real implementation, not a required architectural boundary; its proposed simplification is described below.
+Keep the working slices, but simplify mechanisms that exceed the product need. Buttons have an independent, Django-like API rather than being registered as bulk actions. The standalone Python formatter was a real implementation, not a required architectural boundary; it has since been removed, as described below.
 
 ## Proposed shape as features arrive
 
@@ -47,9 +46,9 @@ src/django_extensions_admin/
 │   ├── decorators.py
 │   ├── mixins.py
 │   └── views.py
-├── jsonwidget/                 simplify existing implementation
+├── jsonwidget/                 simplified: stdlib rendering, no custom parser
 │   ├── widgets.py              thin Python widget and initial rendering
-│   └── readonly.py             escaped readonly output; JS enhances highlighting
+│   └── readonly.py             escaped readonly output and its own stylesheet opt-in
 ├── filters/                  + range and choice filters using list_filter
 │   ├── ranges.py             + date/numeric filtering
 │   └── choices.py            + searchable/multiple-value choice filtering
@@ -97,11 +96,13 @@ Initial callback proposal: list-level operations receive `(self, request)`; exis
 
 ### JSON and filters
 
-The JSON widget changes presentation, not model field type, validation or storage. Reinspection of the Fabriq reference confirms a thin Python AdminTextareaWidget using json.loads/json.dumps in format_value, plus vanilla JS for highlighting, autosize, validation and blur formatting. Our current Python formatter goes further: tokenization and a recursive pretty-printer shared by widget and readonly rendering. Do not treat that extra machinery as necessary merely because it is already implemented.
+The JSON widget changes presentation, not model field type, validation or storage. Implemented as a thin `AdminTextareaWidget` using `json.loads`/`json.dumps` in `format_value`, plus vanilla JS for highlighting, autosize, validation and an explicit reformat - the Fabriq reference shape. The earlier tokenizer and recursive pretty-printer in `jsonwidget/formatter.py` were removed rather than relocated.
 
-Proposed simplification: thin widgets.py for normal initial rendering and Django Media; readonly.py for escaped readable output; existing JS/CSS for enhancement. Remove the standalone custom Python parser/formatter if native serialization and untouched submitted-input handling satisfy the actual contract. This is a behavioral simplification, not moving the same machinery into widgets.py. Preserve malformed submitted input and distinguish Python string values from raw JSON text. Keep native JSONField storage semantics and document any change to the prototype's stronger text-preservation guarantee.
+Why that is not a loss: Django's `forms.JSONField.bound_data()` parses submitted text and `prepare_value()` re-serialises it, so every string reaching `format_value` has already been through the same stdlib round trip. The one string that has not - `InvalidJSONInput`, kept after failed validation - is deliberately returned untouched, so malformed submitted input still survives redisplay byte for byte. Native JSONField storage semantics are unchanged; README states the boundary between rendering, the browser's Format button and a save.
 
-Browser formatting must not silently change large integers. Fabriq uses JSON.parse/stringify on blur; a direct Node reproduction changes 9007199254740993 to 9007199254740992. Use standard parsing for validation only and evaluate a small whitespace-only formatter for editing, respecting strings/escapes. Avoid duplicating a full JSON grammar in Python and JS. Readonly enhancement may share the existing JS highlighter; prove asset inclusion even on readonly-only pages and retain a readable no-JS fallback. Keep XSS, missing-CSS, undo/selection and oversized-input checks focused on observable behavior.
+Browser formatting must not silently change large integers, and this is the one place where the risk is real: the text has not reached the server yet. `JSON.parse`/`JSON.stringify` turns 9007199254740993 into 9007199254740992 and 1.0E2 into 100, so the script validates with the native parser and then re-indents whitespace only, copying every literal verbatim. That re-indenter carries no grammar of its own - it runs only on text `JSON.parse` accepted - so no full JSON grammar is duplicated between Python and JS. Highlighting on both sides is one token regex, escaped, degrading to plain text on input it does not recognise.
+
+Readonly rendering is server-side escaped `<pre>` markup with the same token regex, and carries its own asset opt-in (`JSONReadonlyMixin`, a plain Django `class Media`), so a readonly-only admin depends on neither an editable widget nor the buttons mixin; without the stylesheet the text is still readable. XSS, missing-CSS, undo/selection, no-JS and oversized-input checks stay focused on observable behavior.
 
 Filters plug into ModelAdmin.list_filter and the authorized queryset. No generic query engine. Date boundaries/timezones and numeric input get focused behavior checks, not a new expression language.
 
@@ -136,7 +137,7 @@ REPL is a separate explicit opt-in with feature-local dependencies and a separat
 Queue only one bounded outcome at a time; these are proposed tasks, not dispatched workers.
 
 1. **Independent Django-like buttons.** Implement the separate button decorator and changelist/changeform/row placement lists. Prove buttons never leak into the action dropdown, native actions stay intact, object handlers can be reused in two positions, and permission/CSRF/intermediate responses/list_editable work. No backend or branding changes.
-   **Separate bounded cleanup before the consumer pilot:** simplify JSON rendering against the Fabriq UX reference, reducing custom parsing rather than relocating it. Preserve the important browser/data contracts above; update README/tests for any deliberate reduction in prototype guarantees.
+   **Separate bounded cleanup before the consumer pilot:** done - JSON rendering was simplified against the Fabriq UX reference, removing the custom Python parser and the duplicated JS grammar rather than relocating them, closing the readonly-only asset gap, and restating the fidelity guarantee honestly in the README.
 2. **First consumer pilot.** Once the user supplies the application, install a local wheel and integrate one useful button and JSON field. Record integration friction; do not pull application business logic into the library. This feedback may reorder subsequent work.
 3. **Range filters.** One date range and one numeric range through list_filter, composed with search/permissions. Done when valid/invalid inputs and relevant timezone boundaries work. Choice filters are a following small slice, not a blocker for the first usable ranges.
 4. **Task-backend spike.** Execute one harmless allowed command on a real DB worker, then the same task on a Celery worker if available/authorized. Check failure and protected result retrieval, JSON payloads and transaction timing. State tested versions/capabilities. No permanent backend abstraction; backend recommendation follows evidence.

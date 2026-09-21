@@ -8,201 +8,137 @@
     "use strict";
 
     var DEBOUNCE_MS = 200;
-
-    /* --- lossless formatting -------------------------------------------------
-       Deliberately not JSON.parse + JSON.stringify: that rounds any integer past
-       2^53, rewrites 1.0E2 as 100 and collapses duplicate keys. This scanner only
-       rewrites the whitespace between tokens and copies every literal verbatim. */
-
-    var NUMBER_RE = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/;
     var WHITESPACE = " \t\n\r";
 
-    /* lenient: stop at the first character that is not JSON and return what was read
-       so far, in one pass. Highlighting needs that for half-typed input; prettyText
-       never uses it, so formatting still refuses anything it does not fully understand. */
-    function tokenize(text, lenient) {
-        var tokens = [];
-        var i = 0;
-        while (i < text.length) {
-            var ch = text.charAt(i);
-            if (WHITESPACE.indexOf(ch) !== -1) {
-                i += 1;
-                continue;
-            }
-            if (ch === '"') {
-                var j = i + 1;
-                var closed = false;
-                while (j < text.length) {
-                    var cur = text.charAt(j);
-                    if (cur === "\\") {
-                        j += 2;
-                        continue;
-                    }
-                    if (cur === '"') {
-                        closed = true;
-                        j += 1;
-                        break;
-                    }
-                    j += 1;
-                }
-                if (!closed) {
-                    if (lenient) {
-                        return tokens;
-                    }
-                    throw new Error("Unterminated string at " + i);
-                }
-                tokens.push({ kind: "string", start: i, end: j, text: text.slice(i, j) });
-                i = j;
-                continue;
-            }
-            if ("{}[],:".indexOf(ch) !== -1) {
-                tokens.push({ kind: "punct", start: i, end: i + 1, text: ch });
-                i += 1;
-                continue;
-            }
-            var number = NUMBER_RE.exec(text.slice(i));
-            if (number) {
-                tokens.push({ kind: "number", start: i, end: i + number[0].length, text: number[0] });
-                i += number[0].length;
-                continue;
-            }
-            var rest = text.slice(i);
-            var literal = ["true", "false", "null"].filter(function (word) {
-                return rest.indexOf(word) === 0;
-            })[0];
-            if (literal) {
-                tokens.push({ kind: "literal", start: i, end: i + literal.length, text: literal });
-                i += literal.length;
-                continue;
-            }
-            if (lenient) {
-                return tokens;
-            }
-            throw new Error("Unexpected character " + ch + " at " + i);
-        }
-        return tokens;
-    }
+    /* --- highlighting --------------------------------------------------------
+       One pass: a string followed by a colon is a key, then plain strings, numbers,
+       literals and punctuation. Anything unmatched - whitespace, half-typed input -
+       stays plain, so broken text is still readable. The server mirrors this regex in
+       jsonwidget/readonly.py. */
 
-    function prettyText(text, indent) {
-        var tokens = tokenize(text);
-        var position = 0;
-        var out = [];
+    var TOKEN_RE = /("(?:\\.|[^"\\])*")(\s*:)|("(?:\\.|[^"\\])*")|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|\b(true|false|null)\b|([{}[\],:])/g;
 
-        function take() {
-            if (position >= tokens.length) {
-                throw new Error("Unexpected end of JSON input");
-            }
-            position += 1;
-            return tokens[position - 1];
-        }
-
-        function peek() {
-            return position < tokens.length ? tokens[position] : null;
-        }
-
-        function pad(depth) {
-            return new Array(indent * depth + 1).join(" ");
-        }
-
-        function container(depth, closing, item) {
-            var opening = closing === "}" ? "{" : "[";
-            var next = peek();
-            if (next && next.kind === "punct" && next.text === closing) {
-                take();
-                out.push(opening + closing);
-                return;
-            }
-            out.push(opening + "\n");
-            for (;;) {
-                out.push(pad(depth + 1));
-                item(depth + 1);
-                var sep = take();
-                if (sep.kind !== "punct") {
-                    throw new Error("Expected , or " + closing);
-                }
-                if (sep.text === ",") {
-                    out.push(",\n");
-                    continue;
-                }
-                if (sep.text === closing) {
-                    out.push("\n" + pad(depth) + closing);
-                    return;
-                }
-                throw new Error("Expected , or " + closing);
-            }
-        }
-
-        function member(depth) {
-            var key = take();
-            if (key.kind !== "string") {
-                throw new Error("Object keys must be strings");
-            }
-            out.push(key.text);
-            var colon = take();
-            if (colon.kind !== "punct" || colon.text !== ":") {
-                throw new Error("Expected :");
-            }
-            out.push(": ");
-            value(depth);
-        }
-
-        function value(depth) {
-            var token = take();
-            if (token.kind === "string" || token.kind === "number" || token.kind === "literal") {
-                out.push(token.text);
-                return;
-            }
-            if (token.text === "{") {
-                container(depth, "}", member);
-                return;
-            }
-            if (token.text === "[") {
-                container(depth, "]", value);
-                return;
-            }
-            throw new Error("Unexpected " + token.text);
-        }
-
-        if (!tokens.length) {
-            throw new Error("Empty JSON input");
-        }
-        value(0);
-        if (peek()) {
-            throw new Error("Trailing data");
-        }
-        return out.join("");
-    }
-
-    /* --- highlighting -------------------------------------------------------- */
+    var CLASS_FOR_GROUP = [
+        null,
+        "admin-ext-json-key",
+        "admin-ext-json-punct",
+        "admin-ext-json-string",
+        "admin-ext-json-number",
+        "admin-ext-json-literal",
+        "admin-ext-json-punct"
+    ];
 
     function escapeHtml(text) {
         return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
-    var CLASS_FOR_KIND = {
-        string: "admin-ext-json-string",
-        number: "admin-ext-json-number",
-        literal: "admin-ext-json-literal",
-        punct: "admin-ext-json-punct"
-    };
-
-    /* Highlights as much as it can: broken input is still coloured up to the point the
-       scanner gives up, and the remainder is shown as plain escaped text. */
     function highlight(text) {
-        var tokens = tokenize(text, true);
         var html = "";
-        var cursor = 0;
-        for (var i = 0; i < tokens.length; i += 1) {
-            var token = tokens[i];
-            html += escapeHtml(text.slice(cursor, token.start));
-            var next = tokens[i + 1];
-            var isKey =
-                token.kind === "string" && next && next.kind === "punct" && next.text === ":";
-            var cls = isKey ? "admin-ext-json-key" : CLASS_FOR_KIND[token.kind];
-            html += '<span class="' + cls + '">' + escapeHtml(token.text) + "</span>";
-            cursor = token.end;
+        var last = 0;
+        var match;
+        TOKEN_RE.lastIndex = 0;
+        while ((match = TOKEN_RE.exec(text)) !== null) {
+            html += escapeHtml(text.slice(last, match.index));
+            for (var group = 1; group < CLASS_FOR_GROUP.length; group += 1) {
+                if (match[group] !== undefined) {
+                    html +=
+                        '<span class="' + CLASS_FOR_GROUP[group] + '">' +
+                        escapeHtml(match[group]) +
+                        "</span>";
+                }
+            }
+            last = match.index + match[0].length;
         }
-        return html + escapeHtml(text.slice(cursor));
+        return html + escapeHtml(text.slice(last));
+    }
+
+    /* --- lossless re-indenting ------------------------------------------------
+       Deliberately not JSON.parse + JSON.stringify: that rounds any integer past 2^53,
+       rewrites 1.0E2 as 100 and collapses duplicate keys - in text the user just typed
+       and has not sent anywhere yet. This rewrites only the whitespace between
+       structural characters and copies every literal through byte for byte.
+
+       It carries no grammar of its own: reformat() runs it only on text JSON.parse has
+       already accepted, so the native parser owns validity and this owns fidelity. */
+
+    function pad(indent, depth) {
+        return new Array(indent * depth + 1).join(" ");
+    }
+
+    function skipWhitespace(text, index) {
+        while (index < text.length && WHITESPACE.indexOf(text.charAt(index)) !== -1) {
+            index += 1;
+        }
+        return index;
+    }
+
+    function endOfString(text, start) {
+        var index = start + 1;
+        while (index < text.length) {
+            var ch = text.charAt(index);
+            if (ch === "\\") {
+                index += 2;
+                continue;
+            }
+            index += 1;
+            if (ch === '"') {
+                return index;
+            }
+        }
+        return index;
+    }
+
+    function reindent(text, indent) {
+        var out = "";
+        var depth = 0;
+        var i = 0;
+        while (i < text.length) {
+            var ch = text.charAt(i);
+            if (ch === '"') {
+                var end = endOfString(text, i);
+                out += text.slice(i, end);
+                i = end;
+                continue;
+            }
+            if (WHITESPACE.indexOf(ch) !== -1) {
+                i += 1;
+                continue;
+            }
+            if (ch === "{" || ch === "[") {
+                var after = skipWhitespace(text, i + 1);
+                var closing = ch === "{" ? "}" : "]";
+                if (text.charAt(after) === closing) {
+                    // An empty container keeps its place on the line.
+                    out += ch + closing;
+                    i = after + 1;
+                    continue;
+                }
+                depth += 1;
+                out += ch + "\n" + pad(indent, depth);
+                i += 1;
+                continue;
+            }
+            if (ch === "}" || ch === "]") {
+                depth -= 1;
+                out += "\n" + pad(indent, depth) + ch;
+                i += 1;
+                continue;
+            }
+            if (ch === ",") {
+                out += ",\n" + pad(indent, depth);
+                i += 1;
+                continue;
+            }
+            if (ch === ":") {
+                out += ": ";
+                i += 1;
+                continue;
+            }
+            // A number or a literal: copied verbatim, which is the whole point.
+            out += ch;
+            i += 1;
+        }
+        return out;
     }
 
     /* Character offset the parser choked on, or -1. V8 reports a position, Firefox a
@@ -386,18 +322,16 @@
         if (textarea.value.length > maxChars(textarea)) {
             return;
         }
-        var pretty;
-        try {
-            pretty = prettyText(textarea.value, indentOf(textarea));
-        } catch (error) {
-            validate(shell, textarea);
+        // Validity first, from the native parser; only then the whitespace-only rewrite.
+        if (!validate(shell, textarea)) {
             return;
         }
+        var pretty = reindent(textarea.value, indentOf(textarea));
         if (pretty !== textarea.value) {
             replaceValue(textarea, pretty);
             autosize(shell, textarea);
+            paint(shell, textarea, -1);
         }
-        validate(shell, textarea);
     }
 
     /* The stylesheet hides the textarea's own text, so the overlay may only be built
@@ -457,9 +391,10 @@
             syncScroll(shell, textarea);
         });
         textarea.addEventListener("blur", function () {
-            var valid = validate(shell, textarea);
-            if (valid && textarea.dataset.adminExtBlurFormat === "1") {
+            if (textarea.dataset.adminExtBlurFormat === "1") {
                 reformat(shell, textarea);
+            } else {
+                validate(shell, textarea);
             }
         });
     }
@@ -482,6 +417,4 @@
     document.addEventListener("formset:added", function (event) {
         initAll(event.target, true);
     });
-
-    window.adminExtJSON = { prettyText: prettyText, highlight: highlight, tokenize: tokenize };
 })();

@@ -148,10 +148,14 @@ settings.configure(
 django.setup()
 
 import django_extensions_admin as pkg
-from django_extensions_admin import ButtonsMixin, PrettyJSONWidget, button
+from django_extensions_admin import ButtonsMixin, JSONReadonlyMixin, PrettyJSONWidget, button
 from django_extensions_admin import admin as extensions_admin
+from django_extensions_admin import readonly_json, render_json
 
 assert (extensions_admin.button, extensions_admin.ButtonsMixin) == (button, ButtonsMixin)
+# Read-only JSON brings its own stylesheet, with no editable widget and no buttons.
+assert JSONReadonlyMixin.Media.css == {"all": ("django_extensions_admin/json-widget.css",)}
+assert callable(readonly_json("payload"))
 
 root = pathlib.Path(pkg.__file__).parent
 assert "site-packages" in str(root), f"imported from the source tree, not the wheel: {root}"
@@ -169,8 +173,9 @@ assert finders.find("django_extensions_admin/json-widget.js"), "staticfiles cann
 from django.template.loader import get_template
 get_template("django_extensions_admin/buttons/confirm.html")
 
-from django_extensions_admin.jsonwidget.formatter import pretty_json_text
-assert "9007199254740993" in pretty_json_text('{"n":9007199254740993}')
+# Rendering keeps integers JavaScript cannot hold; Python's are arbitrary precision.
+assert "9007199254740993" in PrettyJSONWidget().format_value('{"n": 9007199254740993}')
+assert "admin-ext-json-key" in render_json({"n": 1})
 print(f"import smoke OK: django_extensions_admin {pkg.__version__} from {root}")
 PY
 ) | tee "$ART/smoke-install.txt"

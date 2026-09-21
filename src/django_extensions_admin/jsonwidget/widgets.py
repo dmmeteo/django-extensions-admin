@@ -8,7 +8,6 @@ from typing import ClassVar
 from django.contrib.admin.widgets import AdminTextareaWidget
 
 from ..conf import get_setting
-from .formatter import JSONFormatError, pretty_json_text
 
 __all__ = ["PrettyJSONWidget"]
 
@@ -72,18 +71,21 @@ class PrettyJSONWidget(AdminTextareaWidget):
     def format_value(self, value):
         """Re-indent the compact string ``forms.JSONField.prepare_value`` produced.
 
-        Text that does not parse is returned untouched - most importantly
-        ``InvalidJSONInput``, the raw text kept after failed validation, so someone who
-        submitted broken JSON gets their own input back instead of an empty box.
+        That string is already the output of ``json.dumps``, so re-indenting it with the
+        standard library changes nothing but whitespace. Text that does not parse is
+        returned untouched - most importantly ``InvalidJSONInput``, the raw text kept
+        after failed validation, so someone who submitted broken JSON gets their own
+        input back instead of an empty box.
         """
         if not value or not isinstance(value, str):
             return value
         if len(value) > self.max_pretty_chars:
             return value
         try:
-            return pretty_json_text(value, indent=self.indent)
-        except JSONFormatError:
+            parsed = json.loads(value)
+        except ValueError:
             return value
+        return json.dumps(parsed, indent=self.indent, ensure_ascii=False)
 
     def value_from_datadict(self, data, files, name):
         value = super().value_from_datadict(data, files, name)
@@ -92,8 +94,3 @@ class PrettyJSONWidget(AdminTextareaWidget):
         if isinstance(value, str):
             return value.replace("﻿", "")
         return value
-
-
-def compact_json(value) -> str:
-    """Serialise *value* the way ``forms.JSONField.prepare_value`` does."""
-    return json.dumps(value, ensure_ascii=False)

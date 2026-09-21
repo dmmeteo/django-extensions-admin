@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.db import models
 
-from django_extensions_admin import PrettyJSONWidget, readonly_json
+from django_extensions_admin import JSONReadonlyMixin, PrettyJSONWidget, readonly_json
 from django_extensions_admin import admin as extensions_admin
 
 from .models import Device, Reading
@@ -120,3 +120,30 @@ class PlainReadingAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Reading, PlainReadingAdmin)
+
+
+class ReadonlyOnlyDeviceAdmin(JSONReadonlyMixin, admin.ModelAdmin):
+    """JSON rendered read-only and nothing else: no editable widget, no buttons mixin.
+
+    The mixin is the whole opt-in; without it the page would still be readable, just
+    unstyled. `fields` keeps every editable JSONField off the page on purpose.
+    """
+
+    fields = ("name", "notes_pretty")
+    readonly_fields = ("notes_pretty",)
+
+    notes_pretty = readonly_json("notes", short_description="Notes (read only)")
+
+
+class UnstyledReadonlyReadingAdmin(admin.ModelAdmin):
+    """The same rendering without the mixin: readable text, no stylesheet."""
+
+    fields = ("device", "payload_pretty")
+    readonly_fields = ("payload_pretty",)
+
+    payload_pretty = readonly_json("payload", short_description="Payload (read only)")
+
+
+readonly_site = admin.AdminSite(name="readonly")
+readonly_site.register(Device, ReadonlyOnlyDeviceAdmin)
+readonly_site.register(Reading, UnstyledReadonlyReadingAdmin)

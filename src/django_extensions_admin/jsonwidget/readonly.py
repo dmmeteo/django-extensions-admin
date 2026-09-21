@@ -3,40 +3,69 @@
 from __future__ import annotations
 
 import json
+import re
+from typing import ClassVar
 
 from django.utils.html import conditional_escape
 from django.utils.safestring import mark_safe
 
 from ..conf import get_setting
-from .formatter import PUNCT, STRING, JSONFormatError, pretty_json_text, tokenize
 
-__all__ = ["readonly_json", "render_json"]
+__all__ = ["JSONReadonlyMixin", "readonly_json", "render_json"]
 
-CLASS_FOR_KIND = {
-    "string": "admin-ext-json-string",
-    "number": "admin-ext-json-number",
-    "literal": "admin-ext-json-literal",
-    "punct": "admin-ext-json-punct",
+# One pass over text ``json.dumps`` produced: a string followed by a colon is a key, then
+# plain strings, numbers, literals and punctuation. Anything unmatched - whitespace, or the
+# text of a value that did not parse - stays plain. Colouring is presentation, so it never
+# needs a grammar; the browser mirrors this regex in json-widget.js.
+TOKEN_RE = re.compile(
+    r'("(?:\\.|[^"\\])*")(\s*:)'
+    r'|("(?:\\.|[^"\\])*")'
+    r"|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)"
+    r"|\b(true|false|null)\b"
+    r"|([{}\[\],:])"
+)
+
+CLASS_FOR_GROUP = {
+    1: "admin-ext-json-key",
+    2: "admin-ext-json-punct",
+    3: "admin-ext-json-string",
+    4: "admin-ext-json-number",
+    5: "admin-ext-json-literal",
+    6: "admin-ext-json-punct",
 }
 
 
+class JSONReadonlyMixin:
+    """Adds the JSON stylesheet to an admin that only *renders* JSON.
+
+    ``readonly_json`` output is styled by the same stylesheet as the editor, and Django
+    collects widget media only for editable fields. An admin whose JSON fields are all
+    read-only therefore has to ask for the asset itself - this is that request, and it is
+    nothing but a plain Django ``class Media``::
+
+        class ThingAdmin(JSONReadonlyMixin, admin.ModelAdmin):
+            readonly_fields = ("payload_pretty",)
+
+    Without it the output is still perfectly readable, just unstyled.
+    """
+
+    class Media:
+        css: ClassVar[dict[str, tuple[str, ...]]] = {
+            "all": ("django_extensions_admin/json-widget.css",)
+        }
+
+
 def highlight(text: str) -> str:
-    """Wrap JSON tokens in spans. Returns escaped HTML; raises JSONFormatError."""
+    """Wrap JSON tokens in spans. Returns escaped HTML."""
     pieces: list[str] = []
     cursor = 0
-    tokens = tokenize(text)
-    for index, token in enumerate(tokens):
-        pieces.append(conditional_escape(text[cursor : token.start]))
-        following = tokens[index + 1] if index + 1 < len(tokens) else None
-        is_key = (
-            token.kind == STRING
-            and following is not None
-            and following.kind == PUNCT
-            and following.text == ":"
-        )
-        css_class = "admin-ext-json-key" if is_key else CLASS_FOR_KIND[token.kind]
-        pieces.append(f'<span class="{css_class}">{conditional_escape(token.text)}</span>')
-        cursor = token.end
+    for match in TOKEN_RE.finditer(text):
+        pieces.append(conditional_escape(text[cursor : match.start()]))
+        for group, css_class in CLASS_FOR_GROUP.items():
+            captured = match.group(group)
+            if captured is not None:
+                pieces.append(f'<span class="{css_class}">{conditional_escape(captured)}</span>')
+        cursor = match.end()
     pieces.append(conditional_escape(text[cursor:]))
     return "".join(pieces)
 
@@ -57,10 +86,12 @@ def render_json(value, *, indent=None, max_pretty_chars=None) -> str:
     oversized = len(text) > max_pretty_chars
     if not oversized:
         try:
-            text = pretty_json_text(text, indent=indent)
-            body = highlight(text)
-        except JSONFormatError:
+            text = json.dumps(json.loads(text), indent=indent, ensure_ascii=False)
+        except ValueError:
+            # Not JSON - a plain CharField, or a value stored before the field was one.
             body = conditional_escape(text)
+        else:
+            body = highlight(text)
     else:
         body = conditional_escape(text)
 
@@ -73,7 +104,7 @@ def render_json(value, *, indent=None, max_pretty_chars=None) -> str:
 def readonly_json(field_name: str, *, short_description=None, indent=None):
     """Build a display callable for ``readonly_fields`` / ``list_display``.
 
-    class ThingAdmin(admin.ModelAdmin):
+    class ThingAdmin(JSONReadonlyMixin, admin.ModelAdmin):
         readonly_fields = ("payload_pretty",)
         payload_pretty = readonly_json("payload", short_description="Payload")
     """

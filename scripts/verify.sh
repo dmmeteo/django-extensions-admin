@@ -148,7 +148,10 @@ settings.configure(
 django.setup()
 
 import django_extensions_admin as pkg
-from django_extensions_admin import AdminExtensionsMixin, PrettyJSONWidget, admin_button
+from django_extensions_admin import ButtonsMixin, PrettyJSONWidget, button
+from django_extensions_admin import admin as extensions_admin
+
+assert (extensions_admin.button, extensions_admin.ButtonsMixin) == (button, ButtonsMixin)
 
 root = pathlib.Path(pkg.__file__).parent
 assert "site-packages" in str(root), f"imported from the source tree, not the wheel: {root}"

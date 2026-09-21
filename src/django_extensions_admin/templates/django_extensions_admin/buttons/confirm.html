@@ -14,6 +14,7 @@
   <p class="admin-ext-confirm-question{% if button.danger %} admin-ext-confirm-question--danger{% endif %}">{{ question }}</p>
   <form method="post" action="{{ action_url }}">{% csrf_token %}
     <input type="hidden" name="{{ confirmed_field }}" value="1">
+    <input type="hidden" name="{{ return_field }}" value="{{ return_target }}">
     <div class="submit-row">
       <input type="submit" class="{% if button.danger %}deletelink{% else %}default{% endif %}" value="{% translate 'Yes, I am sure' %}">
       <a href="{% if object %}{% url opts|admin_urlname:'change' object.pk %}{% else %}{% url opts|admin_urlname:'changelist' %}{% endif %}" class="button cancel-link">{% translate 'No, take me back' %}</a>

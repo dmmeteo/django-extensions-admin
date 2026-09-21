@@ -1,4 +1,4 @@
-from .decorators import Button, admin_button, collect_buttons
-from .mixins import AdminExtensionsMixin
+from .decorators import Button, button, resolve_buttons
+from .mixins import ButtonsMixin
 
-__all__ = ["AdminExtensionsMixin", "Button", "admin_button", "collect_buttons"]
+__all__ = ["Button", "ButtonsMixin", "button", "resolve_buttons"]

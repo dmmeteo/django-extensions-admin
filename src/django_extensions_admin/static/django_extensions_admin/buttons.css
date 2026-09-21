@@ -54,7 +54,6 @@ ul.object-tools .admin-ext-button--danger:focus {
     border-radius: 4px;
     background: var(--button-bg, #79aec8);
     color: var(--button-fg, #fff);
-    text-decoration: none;
 }
 
 .admin-ext-button--row:hover,

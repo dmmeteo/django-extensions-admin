@@ -11,9 +11,9 @@ and are simply not in this release.
 
 The proposed module boundaries and bounded implementation waves are in
 [ARCHITECTURE.md](ARCHITECTURE.md). They are planning, not implemented features or
-a dispatched batch; the first outcome is independent Django-like buttons.
+a dispatched batch. Independent Django-like buttons are done and are described in the
+[README](README.md); the next outcome is the JSON simplification.
 
-- **Independent Django-like buttons** - separate button decorator and changelist/changeform/row placement lists; no automatic registration in actions. Preserve native styling and safety.
 - **JSON simplification** - keep the Fabriq-style thin Python widget + JS/CSS approach; reduce custom parsing while preserving invalid input, large-number safety in browser formatting, and usable fallbacks. See ARCHITECTURE.md for the proposed responsibility split.
 - **Execution and styling design** - apply the accepted requirements and evaluate the native Django Tasks backend approach in [actions-and-task-execution.md](docs/decisions/actions-and-task-execution.md). Backend integrations remain unverified; customization must preserve stock-admin-dependent widgets and extensions.
 

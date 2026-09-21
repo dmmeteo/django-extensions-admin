@@ -66,28 +66,29 @@ class ButtonBrowserTests(BrowserTestCase):
         page.wait_for_selector("#result_list")
         self.assertEqual(Device.objects.filter(archived=False).count(), 0)
 
+    def test_the_action_dropdown_never_lists_a_button(self):
+        page = self.open_changelist()
+        options = page.eval_on_selector_all(
+            'select[name="action"] option', "nodes => nodes.map(n => n.value)"
+        )
+        self.assertNotIn("ping_all", options)
+        self.assertNotIn("archive", options)
+        self.assertIn("mark_archived", options)
+
     def test_toolbar_button_returns_to_the_filtered_list(self):
         region = Device.objects.order_by("pk").first().region
         page = self.open_changelist(f"?region={region}")
-        expected = Device.objects.filter(region=region).count()
-        page.click('button:has-text("Ping shown devices")')
+        total = Device.objects.count()
+        page.click('button:has-text("Ping all devices")')
         page.wait_for_selector("#result_list")
         self.assertIn(f"region={region}", page.url)
-        self.assertIn(f"Pinged {expected} devices", page.inner_text(".messagelist"))
-        self.assertEqual(Device.objects.filter(status="pinged").count(), expected)
+        self.assertIn(f"Pinged {total} devices", page.inner_text(".messagelist"))
+        self.assertEqual(Device.objects.filter(status="pinged").count(), total)
         self.shot(page, "buttons-filtered-result")
 
-    def test_global_button_covers_every_row(self):
+    def test_report_button_shows_its_result(self):
         page = self.open_changelist()
-        page.click('button:has-text("Ping all devices")')
-        page.wait_for_selector(".messagelist")
-        self.assertEqual(Device.objects.filter(status="pinged").count(), Device.objects.count())
-
-    def test_read_only_button_is_a_link(self):
-        page = self.open_changelist()
-        link = page.locator('a:has-text("Count by region")')
-        self.assertEqual(link.count(), 1)
-        link.click()
+        page.click('button:has-text("Count by region")')
         page.wait_for_selector(".messagelist")
         self.assertIn("eu-west", page.inner_text(".messagelist"))
 
@@ -101,6 +102,21 @@ class ButtonBrowserTests(BrowserTestCase):
         device.refresh_from_db()
         self.assertEqual(device.status, "diagnosed")
         self.shot(page, "buttons-change-form")
+
+    def test_one_handler_returns_to_whichever_page_it_was_used_from(self):
+        """`archive` is placed on the change form and in every row: one endpoint, two
+        sensible destinations."""
+        device = Device.objects.filter(archived=False).order_by("pk").first()
+        page = self.new_page()
+        self.login(page)
+        page.goto(f"{self.live_server_url}{CHANGELIST}{device.pk}/change/")
+        page.click('button:has-text("Archive")')
+        page.wait_for_selector(".admin-ext-confirm-question")
+        page.click('input[value="Yes, I am sure"]')
+        page.wait_for_selector(".messagelist")
+        device.refresh_from_db()
+        self.assertTrue(device.archived)
+        self.assertIn(f"{CHANGELIST}{device.pk}/change/", page.url)
 
     def test_denied_button_is_not_offered_to_the_operator(self):
         page = self.open_changelist(user="operator", password="operator")

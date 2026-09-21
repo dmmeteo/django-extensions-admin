@@ -1,11 +1,7 @@
 {% for button in admin_ext_toolbar_buttons %}
   <li class="admin-ext-toolbar-item">
-    {% if button.read_only %}
-      <a class="admin-ext-button {{ button.css_class }}" href="{{ button.url }}">{{ button.label }}</a>
-    {% else %}
-      <button type="submit" class="admin-ext-button{% if button.danger %} admin-ext-button--danger{% endif %} {{ button.css_class }}"
-              form="{{ button.form_id }}" formaction="{{ button.url }}" formmethod="post"
-              name="_admin_ext_button" value="{{ button.name }}">{{ button.label }}</button>
-    {% endif %}
+    <button type="submit" class="admin-ext-button{% if button.danger %} admin-ext-button--danger{% endif %}"
+            form="{{ button.form_id }}" formaction="{{ button.url }}" formmethod="post"
+            name="_admin_ext_return" value="{{ button.return_to }}">{{ button.label }}</button>
   </li>
 {% endfor %}

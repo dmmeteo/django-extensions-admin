@@ -73,7 +73,7 @@ def render_json(value, *, indent=None, max_pretty_chars=None) -> str:
 def readonly_json(field_name: str, *, short_description=None, indent=None):
     """Build a display callable for ``readonly_fields`` / ``list_display``.
 
-    class ThingAdmin(AdminExtensionsMixin, admin.ModelAdmin):
+    class ThingAdmin(admin.ModelAdmin):
         readonly_fields = ("payload_pretty",)
         payload_pretty = readonly_json("payload", short_description="Payload")
     """

@@ -1,12 +1,12 @@
 """django-extensions-admin: small, native-looking additions to django.contrib.admin."""
 
-from .buttons import AdminExtensionsMixin, admin_button
+from .buttons import ButtonsMixin, button
 from .jsonwidget import PrettyJSONWidget, readonly_json, render_json
 
 __all__ = [
-    "AdminExtensionsMixin",
+    "ButtonsMixin",
     "PrettyJSONWidget",
-    "admin_button",
+    "button",
     "readonly_json",
     "render_json",
 ]

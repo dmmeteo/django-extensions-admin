@@ -3,12 +3,8 @@
 from django.contrib import admin
 from django.db import models
 
-from django_extensions_admin import (
-    AdminExtensionsMixin,
-    PrettyJSONWidget,
-    admin_button,
-    readonly_json,
-)
+from django_extensions_admin import PrettyJSONWidget, readonly_json
+from django_extensions_admin import admin as extensions_admin
 
 from .models import Device, Reading
 
@@ -19,7 +15,7 @@ class ReadingInline(admin.TabularInline):
 
 
 @admin.register(Device)
-class DeviceAdmin(AdminExtensionsMixin, admin.ModelAdmin):
+class DeviceAdmin(extensions_admin.ButtonsMixin, admin.ModelAdmin):
     list_display = ("name", "region", "archived")
     list_editable = ("region",)
     list_filter = ("region", "archived")
@@ -29,72 +25,94 @@ class DeviceAdmin(AdminExtensionsMixin, admin.ModelAdmin):
     readonly_fields = ("notes_pretty",)
     formfield_overrides = {models.JSONField: {"widget": PrettyJSONWidget}}
 
+    # Declaration order below is deliberately not toolbar order: the lists own placement
+    # and order, and "Purge" is declared last but rendered first.
+    changelist_buttons = ["purge", "reset_all", "count_devices", "xss_label"]
+    changeform_buttons = ["reprocess", "download", "archive"]
+    row_buttons = ["archive"]
+
     notes_pretty = readonly_json("notes", short_description="Notes (read only)")
 
     @admin.action(description="Mark archived")
     def mark_archived(self, request, queryset):
         queryset.update(archived=True)
 
-    @admin_button("Reset all", scope="changelist")
-    def reset_all(self, request, queryset):
-        count = queryset.update(region="reset")
+    @extensions_admin.button(description="Reset all")
+    def reset_all(self, request):
+        count = self.get_queryset(request).update(region="reset")
         return f"Reset {count} devices."
 
-    @admin_button("Reset shown", scope="changelist", filtered=True)
-    def reset_shown(self, request, queryset):
-        count = queryset.update(region="shown")
-        return f"Reset {count} shown devices."
+    @extensions_admin.button(description="Count devices", permissions=["view"])
+    def count_devices(self, request):
+        return f"{self.get_queryset(request).count()} devices."
 
-    @admin_button("Count devices", scope="changelist", read_only=True)
-    def count_devices(self, request, queryset):
-        return f"{queryset.count()} devices."
-
-    @admin_button("Purge", scope="changelist", permission="testapp.purge_device", danger=True)
-    def purge(self, request, queryset):
+    @extensions_admin.button(description="Purge", permissions=["purge"], danger=True)
+    def purge(self, request):
         return "purged"
 
-    @admin_button("Reprocess", scope="object")
+    @extensions_admin.button(description='<img src=x onerror="alert(1)">')
+    def xss_label(self, request):
+        return "ok"
+
+    @extensions_admin.button(description="Reprocess")
     def reprocess(self, request, obj):
         obj.region = "reprocessed"
         obj.save(update_fields=["region"])
         return f"Reprocessed {obj.name}."
 
-    @admin_button("Archive", scope="row", confirm="Archive this device?")
+    @extensions_admin.button(description="Archive", confirm="Archive this device?")
     def archive(self, request, obj):
         obj.archived = True
         obj.save(update_fields=["archived"])
         return f"Archived {obj.name}."
 
-    @admin_button('<img src=x onerror="alert(1)">', scope="row", name="xss_label")
-    def xss_label(self, request, obj):
-        return "ok"
-
-    @admin_button(
-        "Always allowed by callable", scope="object", permission=lambda request, obj: True
-    )
-    def callable_permission(self, request, obj):
-        return "ran"
-
-    @admin_button("Download", scope="object", read_only=True, name="download")
+    @extensions_admin.button(description="Download")
     def download(self, request, obj):
         from django.http import HttpResponse
 
         return HttpResponse(b"payload", content_type="text/plain")
 
+    def has_purge_permission(self, request):
+        """The Django-action idiom: permissions=["purge"] looks for exactly this."""
+        return request.user.has_perm("testapp.purge_device")
 
-class VisibleDeviceAdmin(AdminExtensionsMixin, admin.ModelAdmin):
+
+class VisibleDeviceAdmin(extensions_admin.ButtonsMixin, admin.ModelAdmin):
     """Second admin site registration: only non-archived devices are visible at all."""
+
+    changeform_buttons = ["touch"]
 
     def get_queryset(self, request):
         return super().get_queryset(request).filter(archived=False)
 
-    @admin_button("Touch", scope="object", name="touch")
+    @extensions_admin.button(description="Touch")
     def touch(self, request, obj):
-        return "touched"
+        """Returns nothing: the view supplies the default message."""
+
+
+class GuardedDeviceAdmin(extensions_admin.ButtonsMixin, admin.ModelAdmin):
+    """Per-object change permission: the button follows it, at render and at the endpoint."""
+
+    list_display = ("name", "region")
+    row_buttons = ["poke"]
+
+    def has_change_permission(self, request, obj=None):
+        if obj is not None and obj.name == "locked":
+            return False
+        return super().has_change_permission(request, obj)
+
+    @extensions_admin.button(description="Poke")
+    def poke(self, request, obj):
+        obj.region = "poked"
+        obj.save(update_fields=["region"])
+        return "poked"
 
 
 restricted_site = admin.AdminSite(name="restricted")
 restricted_site.register(Device, VisibleDeviceAdmin)
+
+guarded_site = admin.AdminSite(name="guarded")
+guarded_site.register(Device, GuardedDeviceAdmin)
 
 
 class PlainReadingAdmin(admin.ModelAdmin):

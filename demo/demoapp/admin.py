@@ -1,8 +1,9 @@
-"""Demo admin: every button scope and every JSON case in one place."""
+"""Demo admin: every button placement and every JSON case in one place."""
 
 from django.contrib import admin
 
-from django_extensions_admin import AdminExtensionsMixin, admin_button, readonly_json
+from django_extensions_admin import admin as extensions_admin
+from django_extensions_admin import readonly_json
 
 from .models import Device, Reading
 
@@ -15,7 +16,7 @@ class ReadingInline(admin.TabularInline):
 
 
 @admin.register(Device)
-class DeviceAdmin(AdminExtensionsMixin, admin.ModelAdmin):
+class DeviceAdmin(extensions_admin.ButtonsMixin, admin.ModelAdmin):
     list_display = ("name", "region", "status", "archived")
     list_filter = ("region", "status", "archived")
     search_fields = ("name",)
@@ -25,54 +26,62 @@ class DeviceAdmin(AdminExtensionsMixin, admin.ModelAdmin):
     readonly_fields = ("last_report_pretty",)
     exclude = ("last_report",)
 
+    # The lists own placement and order. `archive` appears twice on purpose: one
+    # handler, one endpoint, offered both on the change form and in every row.
+    changelist_buttons = ["ping_all", "count_by_region", "purge_archived"]
+    changeform_buttons = ["run_diagnostics", "archive"]
+    row_buttons = ["archive"]
+
     last_report_pretty = readonly_json("last_report", short_description="Last report")
 
     @admin.action(description="Mark selected devices archived")
     def mark_archived(self, request, queryset):
         queryset.update(archived=True)
 
-    # --- global: every device the current user may change --------------------
-    @admin_button("Ping all devices", scope="changelist")
-    def ping_all(self, request, queryset):
-        count = queryset.update(status="pinged")
+    # --- the whole list: build the queryset yourself, no hidden scope ---------
+    @extensions_admin.button(description="Ping all devices")
+    def ping_all(self, request):
+        count = self.get_queryset(request).update(status="pinged")
         return f"Pinged {count} devices."
 
-    # --- global, but only what the list is currently showing ------------------
-    @admin_button("Ping shown devices", scope="changelist", filtered=True)
-    def ping_shown(self, request, queryset):
-        count = queryset.update(status="pinged")
-        return f"Pinged {count} devices matching the current filters."
-
-    # --- read-only: a link, GET is fine, view permission is enough ------------
-    @admin_button("Count by region", scope="changelist", read_only=True)
-    def count_by_region(self, request, queryset):
+    # --- a report: view permission is enough ---------------------------------
+    @extensions_admin.button(description="Count by region", permissions=["view"])
+    def count_by_region(self, request):
         from django.db.models import Count
 
-        rows = queryset.values("region").annotate(total=Count("pk")).order_by("region")
+        rows = (
+            self.get_queryset(request)
+            .values("region")
+            .annotate(total=Count("pk"))
+            .order_by("region")
+        )
         summary = ", ".join(f"{row['region']}: {row['total']}" for row in rows)
         return summary or "No devices."
 
-    # --- denied for the operator account: permission it does not have ---------
-    @admin_button(
-        "Purge archived",
-        scope="changelist",
-        permission="demoapp.purge_device",
+    # --- denied for the operator account: a permission it does not have -------
+    @extensions_admin.button(
+        description="Purge archived",
+        permissions=["purge"],
         confirm="Delete every archived device? This cannot be undone.",
         danger=True,
     )
-    def purge_archived(self, request, queryset):
-        deleted, _ = queryset.filter(archived=True).delete()
+    def purge_archived(self, request):
+        deleted, _ = self.get_queryset(request).filter(archived=True).delete()
         return (f"Purged {deleted} archived rows.", "warning")
 
+    def has_purge_permission(self, request):
+        """permissions=["purge"] looks for exactly this, like Django's actions do."""
+        return request.user.has_perm("demoapp.purge_device")
+
     # --- one object, from the change form ------------------------------------
-    @admin_button("Run diagnostics", scope="object")
+    @extensions_admin.button(description="Run diagnostics")
     def run_diagnostics(self, request, obj):
         obj.status = "diagnosed"
         obj.save(update_fields=["status"])
         return f"Diagnostics finished for {obj.name}."
 
-    # --- one object, from its row in the list ---------------------------------
-    @admin_button("Archive", scope="row", confirm=True, danger=True)
+    # --- one object, from the change form *and* from its row ------------------
+    @extensions_admin.button(description="Archive", confirm=True, danger=True)
     def archive(self, request, obj):
         obj.archived = True
         obj.save(update_fields=["archived"])

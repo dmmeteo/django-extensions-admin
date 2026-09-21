@@ -1,0 +1,6 @@
+{% if admin_ext_has_buttons %}{% comment %}
+One empty POST form per page. Buttons anywhere in the document - including inside the
+changelist's own form, where a nested form would be invalid - point at it with
+form="..." and override the target with formaction="...". Nothing else is submitted
+with it, so bulk actions and list_editable edits are untouched.
+{% endcomment %}<form id="{{ admin_ext_action_form_id }}" class="admin-ext-action-form" method="post" novalidate>{% csrf_token %}</form>{% endif %}

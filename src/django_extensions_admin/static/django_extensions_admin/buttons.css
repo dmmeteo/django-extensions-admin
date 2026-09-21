@@ -1,0 +1,83 @@
+/* Buttons keep the admin's own look: object-tools entries stay object-tools entries,
+   row buttons are small and quiet. No layout is replaced. */
+
+.admin-ext-action-form {
+    display: none;
+}
+
+ul.object-tools li.admin-ext-toolbar-item {
+    display: inline-block;
+}
+
+ul.object-tools .admin-ext-button {
+    display: inline-block;
+    font-family: inherit;
+    font-size: 0.6875rem;
+    font-weight: 400;
+    line-height: 1rem;
+    padding: 3px 12px;
+    border: none;
+    border-radius: 15px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    background: var(--object-tools-bg, #888);
+    color: var(--object-tools-fg, #fff);
+}
+
+ul.object-tools .admin-ext-button:hover,
+ul.object-tools .admin-ext-button:focus {
+    background: var(--object-tools-hover-bg, #555);
+}
+
+ul.object-tools .admin-ext-button--danger {
+    background: var(--delete-button-bg, #ba2121);
+}
+
+ul.object-tools .admin-ext-button--danger:hover,
+ul.object-tools .admin-ext-button--danger:focus {
+    background: var(--delete-button-hover-bg, #a41515);
+}
+
+.admin-ext-row-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.admin-ext-button--row {
+    font-size: 0.75rem;
+    line-height: 1.2;
+    padding: 2px 8px;
+    cursor: pointer;
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 4px;
+    background: var(--button-bg, #79aec8);
+    color: var(--button-fg, #fff);
+    text-decoration: none;
+}
+
+.admin-ext-button--row:hover,
+.admin-ext-button--row:focus {
+    background: var(--button-hover-bg, #609ab6);
+    color: var(--button-fg, #fff);
+}
+
+.admin-ext-button--row.admin-ext-button--danger {
+    background: var(--delete-button-bg, #ba2121);
+    border-color: var(--delete-button-bg, #ba2121);
+}
+
+.admin-ext-button--row.admin-ext-button--danger:hover,
+.admin-ext-button--row.admin-ext-button--danger:focus {
+    background: var(--delete-button-hover-bg, #a41515);
+}
+
+.admin-ext-confirm-question {
+    font-size: 0.9375rem;
+    margin: 0 0 1em;
+}
+
+.admin-ext-confirm-question--danger {
+    color: var(--error-fg, #ba2121);
+}

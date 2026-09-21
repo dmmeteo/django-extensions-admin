@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.venvs/
+dist/
+artifacts/
+*.sqlite3
+.ruff_cache/

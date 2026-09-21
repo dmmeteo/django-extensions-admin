@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "django-extensions-admin"
+version = "0.1.0"
+description = "Independent, additive utilities for the Django admin: buttons and a JSON field widget. Not affiliated with django-extensions."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Django Stars" }]
+keywords = ["django", "admin", "buttons", "json", "widget"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = ["Django>=5.2,<7"]
+
+[project.urls]
+Homepage = "https://example.invalid/django-extensions-admin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/django_extensions_admin"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/django_extensions_admin", "README.md", "ROADMAP.md", "LICENSE"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [".venvs", "artifacts", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "DJ", "S", "RUF"]
+# RUF012: Django's ModelAdmin/Meta options are plain class-level lists and dicts.
+ignore = ["S101", "RUF012"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106", "S107", "S311"]
+"browser_tests/*" = ["S105", "S106", "S107", "S311"]
+"demo/*" = ["S105", "S106", "S107", "S311"]
+"demo/demoapp/migrations/*" = ["E501", "S105", "S106", "S107", "S311"]

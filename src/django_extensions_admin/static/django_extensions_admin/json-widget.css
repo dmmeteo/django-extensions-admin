@@ -1,0 +1,160 @@
+/* JSON editing affordances for admin textareas, paired with django_extensions_admin/json-widget.js.
+
+   The textarea stays on top and keeps the caret, the selection, the border and every
+   native behaviour; the <pre> underneath paints the colours. Both boxes must therefore
+   agree on every metric that json-widget.js mirrors onto the <pre>. */
+
+:root {
+    /* json-widget.js reads this to confirm the stylesheet loaded before it dares to
+       hide the textarea's own text. Without it there is no overlay at all. */
+    --admin-ext-json-css: 1;
+    --admin-ext-json-key: #7b2d8e;
+    --admin-ext-json-string: #1a7f37;
+    --admin-ext-json-number: #a1560a;
+    --admin-ext-json-literal: #0b62c4;
+    --admin-ext-json-punct: var(--body-quiet-color, #666);
+    --admin-ext-json-selection: rgba(87, 144, 220, 0.35);
+    --admin-ext-json-mark: rgba(220, 70, 70, 0.18);
+}
+
+html[data-theme="dark"] {
+    --admin-ext-json-key: #c792ea;
+    --admin-ext-json-string: #7ec699;
+    --admin-ext-json-number: #f0a35e;
+    --admin-ext-json-literal: #82aaff;
+    --admin-ext-json-selection: rgba(120, 170, 255, 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+    html[data-theme="auto"] {
+        --admin-ext-json-key: #c792ea;
+        --admin-ext-json-string: #7ec699;
+        --admin-ext-json-number: #f0a35e;
+        --admin-ext-json-literal: #82aaff;
+        --admin-ext-json-selection: rgba(120, 170, 255, 0.3);
+    }
+}
+
+.admin-ext-json-shell {
+    position: relative;
+    display: block;
+    max-width: 100%;
+}
+
+textarea.admin-ext-json,
+.admin-ext-json-layer,
+.admin-ext-json-readonly {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    tab-size: 2;
+    white-space: pre;
+    overflow-wrap: normal;
+    box-sizing: border-box;
+}
+
+textarea.admin-ext-json {
+    display: block;
+    width: 100%;
+    overflow: auto;
+    resize: vertical;
+    min-height: 4.5em;
+    max-height: 60vh;
+}
+
+/* Only a field the script actually wrapped goes transparent. With no JS there is no
+   shell, no <pre> underneath, and the textarea keeps its own visible text. */
+.admin-ext-json-shell > textarea.admin-ext-json {
+    position: relative;
+    z-index: 1;
+    background: transparent;
+    color: transparent;
+    caret-color: var(--body-fg, #333);
+}
+
+.admin-ext-json-shell:not(.admin-ext-json-shell--plain) > textarea.admin-ext-json::selection {
+    background: var(--admin-ext-json-selection);
+    color: transparent;
+}
+
+textarea.admin-ext-json.admin-ext-json--invalid {
+    border-color: var(--error-fg, #ba2121);
+}
+
+.admin-ext-json-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    margin: 0;
+    overflow: hidden;
+    pointer-events: none;
+    border-style: solid;
+    border-color: transparent;
+    border-radius: 4px;
+    background: var(--body-bg, #fff);
+    color: var(--body-fg, #333);
+}
+
+/* Any failure - oversized value, highlighting error - lands here: the textarea gets
+   its own colours back, so the worst case is a plain but perfectly editable field. */
+.admin-ext-json-shell--plain .admin-ext-json-layer {
+    display: none;
+}
+
+.admin-ext-json-shell--plain > textarea.admin-ext-json {
+    background: var(--body-bg, #fff);
+    color: var(--body-fg, #333);
+}
+
+.admin-ext-json-key { color: var(--admin-ext-json-key); }
+.admin-ext-json-string { color: var(--admin-ext-json-string); }
+.admin-ext-json-number { color: var(--admin-ext-json-number); }
+.admin-ext-json-literal { color: var(--admin-ext-json-literal); }
+.admin-ext-json-punct { color: var(--admin-ext-json-punct); }
+
+.admin-ext-json-mark {
+    background: var(--admin-ext-json-mark);
+    text-decoration: underline wavy var(--error-fg, #ba2121);
+    text-decoration-skip-ink: none;
+    text-underline-offset: 2px;
+}
+
+.admin-ext-json-footer {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    margin: 4px 0 0;
+    font-size: 11px;
+}
+
+.admin-ext-json-error {
+    margin: 0;
+    color: var(--error-fg, #ba2121);
+}
+
+button.admin-ext-json-format {
+    padding: 1px 8px;
+    font-size: 11px;
+    line-height: 1.6;
+    cursor: pointer;
+    color: var(--body-quiet-color, #666);
+    background: var(--darkened-bg, #f8f8f8);
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 4px;
+}
+
+/* Readonly rendering: same restraint, no editing affordances. */
+.admin-ext-json-readonly {
+    margin: 0;
+    padding: 6px 8px;
+    overflow: auto;
+    max-height: 60vh;
+    background: var(--darkened-bg, #f8f8f8);
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 4px;
+    color: var(--body-fg, #333);
+}
+
+.admin-ext-json-empty {
+    color: var(--body-quiet-color, #666);
+}

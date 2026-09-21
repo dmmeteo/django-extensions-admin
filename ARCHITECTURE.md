@@ -1,0 +1,160 @@
+# Architecture proposal
+
+Status: architecture direction accepted by the user, including the independent `admin.button` API with `changelist_buttons`, `changeform_buttons` and `row_buttons`, and the simpler Fabriq-style JSON widget direction. Local decomposition remains revisable; backend/REPL questions below remain open. This is not a description of shipped features or authorization to implement the entire roadmap. Approval reference: Discord message 1551266173528703077.
+
+Scope: django-extensions-admin, the reusable library. The user's upcoming application is its first consumer, not the subject of this architecture. Its repository and requirements are not yet supplied.
+
+Read [PHILOSOPHY.md](PHILOSOPHY.md) first. This plan applies the prepared architecture-foundation v1: recognizable responsibilities, framework-native roles, small useful slices, economical evidence and removable integrations. Local decomposition may change when implementation reveals a simpler shape.
+
+## Current baseline
+
+Inspected checkout: existing first-slice worktree, branch feat/first-slice. The baseline contains buttons, a JSON widget, demo and tests; implementation files are still uncommitted. Preserve this work before any subsequent reorganization. This planning pass changes documentation only and does not move or clean up the checkout.
+
+```text
+src/django_extensions_admin/
+├── __init__.py
+├── apps.py
+├── conf.py
+├── buttons/
+│   ├── decorators.py
+│   ├── mixins.py
+│   └── views.py
+├── jsonwidget/
+│   ├── formatter.py
+│   ├── widgets.py
+│   └── readonly.py
+├── templates/django_extensions_admin/
+└── static/django_extensions_admin/
+demo/
+tests/
+browser_tests/
+scripts/
+```
+
+Keep the working slices, but simplify mechanisms that exceed the product need. Buttons should have an independent, Django-like API rather than be registered as bulk actions. The existing Python formatter is a real implementation, not a required architectural boundary; its proposed simplification is described below.
+
+## Proposed shape as features arrive
+
+`+` means proposed, not present. Do not create empty future directories or move working modules solely to match this picture.
+
+```text
+src/django_extensions_admin/
+├── __init__.py                 small public surface; no eager optional integrations
+├── admin.py                  + our button API namespace, not a proxy for django.contrib.admin
+├── apps.py                     opt-in setup; no worker/REPL startup
+├── conf.py                     defaults and validation, not a configuration framework
+├── buttons/                    separately registered, Django-like buttons
+│   ├── decorators.py
+│   ├── mixins.py
+│   └── views.py
+├── jsonwidget/                 simplify existing implementation
+│   ├── widgets.py              thin Python widget and initial rendering
+│   └── readonly.py             escaped readonly output; JS enhances highlighting
+├── filters/                  + range and choice filters using list_filter
+│   ├── ranges.py             + date/numeric filtering
+│   └── choices.py            + searchable/multiple-value choice filtering
+├── commands/                 + allowlisted management-command UI
+│   ├── registry.py           + explicit command definitions, forms, permissions
+│   ├── forms.py              + shared Django form behavior if actually needed
+│   ├── admin.py              + opt-in AdminSite URL/context integration
+│   ├── views.py              + validation, enqueue and protected result views
+│   └── tasks.py              + Django Task invoking a registered command
+├── branding.py               + small validated palette/branding configuration
+├── templates/django_extensions_admin/
+│   ├── buttons/
+│   ├── commands/            +
+│   └── branding/            + narrow additive blocks
+└── static/django_extensions_admin/
+    ├── buttons.css
+    ├── json-widget.css
+    ├── json-widget.js
+    ├── filters.css          + only if native styling is insufficient
+    └── branding.css         + optional scoped/theme-variable overrides
+
+demo/                          ordinary Django consumer with generated data
+tests/                         behavior tests, grouped as features grow
+browser_tests/                 consequential UI journeys only
+docs/decisions/                specific unresolved/accepted trade-offs
+scripts/                       existing verify/demo entry points
+PHILOSOPHY.md                   accepted product direction
+ARCHITECTURE.md                 this revisable proposal
+ROADMAP.md                      feature candidates and next slices
+```
+
+Python package markers omitted. REPL remains a desired feature, but its transport/session design needs a spike before adding a shell package. Advanced query search likewise has no speculative parser or empty package yet.
+
+## Boundaries and native contracts
+
+### Buttons
+
+Accepted correction: native-looking does not mean sharing the bulk-action registration system. Buttons use their own decorator and placement lists; neither decorating nor placing a button adds it to ModelAdmin.actions. Existing Django actions remain untouched. Reuse Django conventions (description, permission hooks, message_user, HttpResponse), not a hidden bridge between two registries.
+
+Proposed spelling: `from django_extensions_admin import admin` exposes our `admin.button` and `admin.ButtonsMixin`; import ModelAdmin/register from django.contrib.admin normally. This is a small namespace for our API, not monkey-patching or a mirror/proxy of Django's entire admin module. A direct `button` import can remain available.
+
+Proposed ModelAdmin options: `changelist_buttons` for the list toolbar, `changeform_buttons` for the existing-object change form, and `row_buttons` for list rows. Names follow Django's changelist/changeform vocabulary. The same object handler may appear in both changeform_buttons and row_buttons; separate handlers allow different behavior at each location. Placement/order is declared in these lists rather than duplicated in decorator position flags.
+
+Initial callback proposal: list-level operations receive `(self, request)`; existing-object and row operations receive `(self, request, obj)`. Changeform object buttons are not automatically shown on the add form. If a later button needs selected/filtered querysets, introduce that scope explicitly rather than deriving it from checkbox state or silently treating an empty selection as all objects. Selection-driven bulk work can continue using normal Django actions. Preserve endpoint permission enforcement, POST/CSRF, authorized object lookup, intermediate responses, list state and correct form ownership with list_editable. Exact syntax remains proposed, not implemented.
+
+### JSON and filters
+
+The JSON widget changes presentation, not model field type, validation or storage. Reinspection of the Fabriq reference confirms a thin Python AdminTextareaWidget using json.loads/json.dumps in format_value, plus vanilla JS for highlighting, autosize, validation and blur formatting. Our current Python formatter goes further: tokenization and a recursive pretty-printer shared by widget and readonly rendering. Do not treat that extra machinery as necessary merely because it is already implemented.
+
+Proposed simplification: thin widgets.py for normal initial rendering and Django Media; readonly.py for escaped readable output; existing JS/CSS for enhancement. Remove the standalone custom Python parser/formatter if native serialization and untouched submitted-input handling satisfy the actual contract. This is a behavioral simplification, not moving the same machinery into widgets.py. Preserve malformed submitted input and distinguish Python string values from raw JSON text. Keep native JSONField storage semantics and document any change to the prototype's stronger text-preservation guarantee.
+
+Browser formatting must not silently change large integers. Fabriq uses JSON.parse/stringify on blur; a direct Node reproduction changes 9007199254740993 to 9007199254740992. Use standard parsing for validation only and evaluate a small whitespace-only formatter for editing, respecting strings/escapes. Avoid duplicating a full JSON grammar in Python and JS. Readonly enhancement may share the existing JS highlighter; prove asset inclusion even on readonly-only pages and retain a readable no-JS fallback. Keep XSS, missing-CSS, undo/selection and oversized-input checks focused on observable behavior.
+
+Filters plug into ModelAdmin.list_filter and the authorized queryset. No generic query engine. Date boundaries/timezones and numeric input get focused behavior checks, not a new expression language.
+
+### Management commands and background work
+
+Flow: AdminSite view -> explicit registry + Django form + permission check -> enqueue configured Django Task -> worker revalidates registered command/options -> Django call_command -> bounded result.
+
+Commands are registered by the application; discovery is not permission to run. Forms supply typed, JSON-safe arguments. Neither raw shell strings nor arbitrary management-command names are accepted from the browser. The task and UI share the same registry/validation meaning, not duplicated business rules.
+
+Prefer the Django Tasks interface with an explicitly selected backend alias. The application owns worker deployment, broker/database queue and retention. DB and Celery adapters require real integration evidence; see [the existing decision note](docs/decisions/actions-and-task-execution.md). No custom queue, executor factory, workflow engine or silent inline fallback. Existing application Celery tasks can still be launched by ordinary application callbacks without conversion.
+
+Keep command URLs opt-in through a narrow AdminSite integration; JSON/buttons/filters do not require a custom AdminSite. Background imports must not make Django 5.2 or widget-only installations require task packages. Native 6.0 first; validate the optional 5.2 backport before claiming that feature supported there.
+
+Result authorization is a required spike outcome: bind each run to the initiating actor/allowed viewers and the correct task/backend. A task ID alone is not authority. Prefer backend-owned task metadata and small signed references where adequate; if this cannot support protected retrieval cleanly, surface the need for minimal metadata persistence as a product decision. Do not smuggle in a full run-history model. Logs/results need bounded size, output sanitization and capability-aware availability. Dispatch follows transaction commit when needed; retries are explicit for non-idempotent commands.
+
+### Branding and REPL
+
+Branding changes documented CSS variables and narrow template blocks, preserving block.super, native assets, DOM hooks and light/dark/auto. Native AdminSite title/header settings remain authoritative. Component styles stay namespaced. Turning branding off must leave the functional features working; no global reset or broad input/button rules.
+
+REPL is a separate explicit opt-in with feature-local dependencies and a separately authorized route. Its exploratory task must resolve authentication, session/process lifecycle, expiry, resource limits and deployment transport, and evaluate Ghostty frontend feasibility. It is arbitrary Python execution with application privileges, not a sandbox. Do not force WebSockets/ASGI tooling onto the rest of the package before that decision.
+
+## Dependency and removal rules
+
+- Each feature depends on Django, not on neighboring features. Share a helper only when a concrete shared responsibility appears.
+- Commands use Django Tasks; backend packages are optional application-selected integrations. Django tasks are not our replacement for a queue runtime.
+- Core library features need no application data models/migrations. Queue backend tables belong to the selected backend. Any new library persistence requires a justified change to this plan.
+- No repository-wide services/selectors/repositories hierarchy, compulsory MegaModelAdmin, generic operation DSL or utils dumping ground.
+- Removal: remove widget/filter declarations, button presentation bindings, or command routes/configuration. Business actions, JSONField data and management commands stay usable in Django. Drain pending work and handle retained results before removing execution integrations. Native replacements get a documented transition, not permanent compatibility machinery.
+
+## First implementation waves
+
+Queue only one bounded outcome at a time; these are proposed tasks, not dispatched workers.
+
+1. **Independent Django-like buttons.** Implement the separate button decorator and changelist/changeform/row placement lists. Prove buttons never leak into the action dropdown, native actions stay intact, object handlers can be reused in two positions, and permission/CSRF/intermediate responses/list_editable work. No backend or branding changes.
+   **Separate bounded cleanup before the consumer pilot:** simplify JSON rendering against the Fabriq UX reference, reducing custom parsing rather than relocating it. Preserve the important browser/data contracts above; update README/tests for any deliberate reduction in prototype guarantees.
+2. **First consumer pilot.** Once the user supplies the application, install a local wheel and integrate one useful button and JSON field. Record integration friction; do not pull application business logic into the library. This feedback may reorder subsequent work.
+3. **Range filters.** One date range and one numeric range through list_filter, composed with search/permissions. Done when valid/invalid inputs and relevant timezone boundaries work. Choice filters are a following small slice, not a blocker for the first usable ranges.
+4. **Task-backend spike.** Execute one harmless allowed command on a real DB worker, then the same task on a Celery worker if available/authorized. Check failure and protected result retrieval, JSON payloads and transaction timing. State tested versions/capabilities. No permanent backend abstraction; backend recommendation follows evidence.
+5. **Minimal command runner.** Explicit registry, argument form, permitted launch and basic authorized status/output using the validated backend. Done when allowed and denied runs and worker failure are exercised. No persisted history dashboard, auto-retry policy or generic form builder.
+6. **Restrained branding.** Palette/logo/title with on/off checks for stock widgets, our editor, light/dark/auto and project overrides. No markup redesign.
+7. **REPL spike, then a separate implementation decision.** Validate Ghostty transport and process lifecycle before offering a production-facing shell. Advanced query search remains a later bounded design task.
+
+For evolutionary work, use behavior-driven red/green/refactor and retain the existing repository gate. Add tests for plausible failure modes, not quotas or every helper. Use a few browser journeys for selection, layout, fallback and form ownership; do not replay the full rule matrix at every layer.
+
+## Philosophy fit
+
+Need: repeated admin friction without replacing Django. Smallest API: ordinary ModelAdmin declarations, widgets, filters, forms and Tasks. Independence: optional modules without cross-feature adoption. Safety: explicit scope/authorization/activation, native data semantics. Exit path: remove the presentation/integration while preserving application logic and data. Scope: no new admin platform, queue or history system.
+
+## Open before relevant implementation
+
+- First consumer repository, its Python/Django versions, custom AdminSite/templates and existing runner.
+- Confirm the proposed independent button namespace and changelist/changeform/row list names; advanced selected/filtered button scope is not required for the first slice.
+- Backend feasibility and result-ownership mechanism; optional 5.2 task compatibility.
+- REPL deployment/transport and target environment.
+
+These do not block discussing or refining the independent button slice. Do not invent the new application's architecture from this library plan.

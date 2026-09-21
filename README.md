@@ -1,8 +1,8 @@
 # django-extensions-admin
 
-Small, additive utilities for the Django admin you already have: **buttons** and a
-**JSON field editor**. No redesign, no base class you must inherit everywhere, no build
-step, no runtime dependency beyond Django.
+Small, additive utilities for the Django admin you already have: **buttons**, a
+**JSON field editor** and **range filters**. No redesign, no base class you must inherit
+everywhere, no build step, no runtime dependency beyond Django.
 
 > **Independent project.** Inspired by the spirit of `django-extensions`, but not
 > official, not affiliated with it, and it does not depend on it. The name is
@@ -266,6 +266,90 @@ exactly as typed, so a failed save hands your own JSON back to you.
 
 Each of these is asserted in the browser tests, not assumed.
 
+## Range filters
+
+Inclusive from/to bounds for a date, datetime or numeric column, as an ordinary
+`list_filter` entry. Nothing is registered globally, so a field only gets a range filter
+where you ask for one.
+
+```python
+from django.contrib import admin
+from django_extensions_admin import DateRangeFilter, DateTimeRangeFilter, NumericRangeFilter
+
+@admin.register(Reading)
+class ReadingAdmin(admin.ModelAdmin):
+    list_filter = [
+        ("recorded_on", DateRangeFilter),
+        ("recorded_at", DateTimeRangeFilter),
+        ("value", NumericRangeFilter),
+        "device",
+    ]
+```
+
+That is the whole adoption: no mixin, no setting, no custom `AdminSite`, no template of
+your own. The sidebar gets two native inputs and an **Apply** button - no JavaScript at all.
+
+| Filter | Field types | Input | Query parameters |
+| --- | --- | --- | --- |
+| `DateRangeFilter` | `DateField`, `DateTimeField` | `<input type="date">` | `<field>__range__gte`, `<field>__range__lte` |
+| `DateTimeRangeFilter` | `DateTimeField` | `<input type="datetime-local">` | the same two |
+| `NumericRangeFilter` | `IntegerField`, `FloatField`, `DecimalField` | `<input type="number">` | the same two |
+
+Both parameters are optional: one bound alone is a one-sided range, not an error. They are
+declared as the filter's expected parameters, so the changelist hands them to the filter
+instead of treating them as raw ORM lookups. Attaching a filter to a field type it cannot
+read raises `ImproperlyConfigured` at the point the changelist builds its filters, naming
+the class and the field.
+
+### What the bounds mean
+
+- **A `DateField`** is filtered with `__gte` and `__lte` on the dates themselves. Both ends
+  are included.
+- **A `DateTimeField` under `DateRangeFilter`** means whole days: `__gte` at midnight
+  starting the first day and `__lt` at midnight after the last. Half-open at the top on
+  purpose - an inclusive `__lte` would have to name a last instant, and would then drop
+  whatever a column with more precision than that instant still holds.
+- **`DateTimeRangeFilter`** includes both instants, to the minute the browser offers.
+- **`NumericRangeFilter`** includes both numbers, parsed by the model field's own form
+  field. A `DecimalField` therefore brings its own precision and the matching input step,
+  and an `IntegerField` its column's range.
+
+**Timezone.** Every date-like bound is read in Django's *active* timezone, so "the 3rd"
+means the reader's 3rd, not UTC's. Parsing is Django's own `forms.DateField` /
+`forms.DateTimeField`, which already route through `from_current_timezone()`; the whole-day
+boundaries use `timezone.make_aware()`. With `USE_TZ = False` the bounds stay naive, like
+the column. A `datetime-local` input has no timezone picker, so the time you type is a
+local wall-clock time, not an offset.
+
+### When input is wrong
+
+None of these raises, and none of them widens the result. The filter runs on the queryset
+your `ModelAdmin` already authorized, so it can only take rows away from it.
+
+| Input | What happens |
+| --- | --- |
+| Neither bound | No filtering. The form still renders. |
+| One bound only | A one-sided range. Supported, not an error. |
+| A bound the field cannot read | The error is shown under that input, and the list is empty. |
+| Start after end | "The start of the range is after its end." under the form, and the list is empty. |
+
+An empty list is the point: a bound nobody can read must not quietly behave like no filter
+at all. The text you typed is handed straight back in the HTML, though a browser's
+`<input type="number">` will decline to *display* something that is not a number.
+
+Submitting the form is an ordinary GET. It carries the rest of the query string - the
+search term, the ordering, the other filters - as hidden inputs, and drops the page number,
+because a new range starts at page one. **Clear** removes that filter's own two parameters
+and nothing else. Each range filter is its own form, so applying two of them is two
+submits; the second carries the first.
+
+### Removing range filters
+
+Delete the `list_filter` entry and the import. There is no model field, no migration, no
+stored state and no data format of ours anywhere - bookmarked URLs simply stop filtering.
+Django's own `DateFieldListFilter` and `admin.EmptyFieldListFilter` are drop-in
+replacements for part of it if you want to keep something.
+
 ## Demo
 
 ```bash
@@ -278,7 +362,9 @@ Loopback only, a disposable SQLite file, and entirely generated data. The demo s
 button placement (changelist, change form, row, one handler in two places, and one denied
 by permission) and
 the JSON cases worth seeing: nested values, Unicode, numbers JavaScript cannot represent,
-HTML-looking strings, a >100 KB payload in plain mode, and a read-only rendering.
+HTML-looking strings, a >100 KB payload in plain mode, and a read-only rendering. Readings
+and devices carry dates, instants and numbers for the range filters, with sightings just
+after and just before local midnight so the timezone boundary is visible.
 
 `DEMO_PORT=9000 bash scripts/demo.sh` changes the port.
 
@@ -317,6 +403,13 @@ and Safari are untested.
   no persisted run history.
 - Long-running handlers block the request; hand work to your own task runner.
 - The JSON editor is a text editor, not a tree view, schema editor or diff tool.
+- Range filters are two bounds on one field. No saved presets, no relative shortcuts
+  ("last 7 days" is Django's own `DateFieldListFilter`), no `__in` lists, no query builder.
+- Range filters show no facet counts. Django's counts are per choice, and a range is not a
+  list of choices; `show_facets` still works for every other filter on the page.
+- `<input type="date">` and `<input type="datetime-local">` are the browser's own controls.
+  Their displayed format follows the browser's locale rather than Django's, and a browser
+  without them falls back to a text field that wants `YYYY-MM-DD`.
 - Error-offset marking depends on the browser's parser message, which differs between
   engines and is absent in some.
 - Accessibility has not been audited. The field is a real `<textarea>` and the highlight

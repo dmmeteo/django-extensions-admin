@@ -1,6 +1,6 @@
 # Architecture proposal
 
-Status: architecture direction accepted by the user, including the independent `admin.button` API with `changelist_buttons`, `changeform_buttons` and `row_buttons`, and the simpler Fabriq-style JSON widget direction. Both are now implemented; the JSON simplification below describes shipped behavior. Local decomposition remains revisable; backend/REPL questions below remain open. This is not a description of shipped features or authorization to implement the entire roadmap. Approval reference: Discord message 1551266173528703077.
+Status: architecture direction accepted by the user, including the independent `admin.button` API with `changelist_buttons`, `changeform_buttons` and `row_buttons`, and the simpler Fabriq-style JSON widget direction. Both are now implemented; the JSON simplification below describes shipped behavior. The range filters of wave 3 are implemented too, and the Filters section below describes what ships rather than a proposal. Local decomposition remains revisable; backend/REPL questions below remain open. This is not a description of shipped features or authorization to implement the entire roadmap. Approval reference: Discord message 1551266173528703077.
 
 Scope: django-extensions-admin, the reusable library. The user's upcoming application is its first consumer, not the subject of this architecture. Its repository and requirements are not yet supplied.
 
@@ -49,8 +49,8 @@ src/django_extensions_admin/
 ├── jsonwidget/                 simplified: stdlib rendering, no custom parser
 │   ├── widgets.py              thin Python widget and initial rendering
 │   └── readonly.py             escaped readonly output and its own stylesheet opt-in
-├── filters/                  + range and choice filters using list_filter
-│   ├── ranges.py             + date/numeric filtering
+├── filters/                    range and choice filters using list_filter
+│   ├── ranges.py               date/numeric filtering: three list_filter classes
 │   └── choices.py            + searchable/multiple-value choice filtering
 ├── commands/                 + allowlisted management-command UI
 │   ├── registry.py           + explicit command definitions, forms, permissions
@@ -61,13 +61,14 @@ src/django_extensions_admin/
 ├── branding.py               + small validated palette/branding configuration
 ├── templates/django_extensions_admin/
 │   ├── buttons/
+│   ├── filters/                the range filter body inside the stock <details> shell
 │   ├── commands/            +
 │   └── branding/            + narrow additive blocks
 └── static/django_extensions_admin/
     ├── buttons.css
     ├── json-widget.css
     ├── json-widget.js
-    ├── filters.css          + only if native styling is insufficient
+    ├── filters.css            sidebar fit for the range inputs; the form works without it
     └── branding.css         + optional scoped/theme-variable overrides
 
 demo/                          ordinary Django consumer with generated data
@@ -94,7 +95,7 @@ Proposed ModelAdmin options: `changelist_buttons` for the list toolbar, `changef
 
 Initial callback proposal: list-level operations receive `(self, request)`; existing-object and row operations receive `(self, request, obj)`. Changeform object buttons are not automatically shown on the add form. If a later button needs selected/filtered querysets, introduce that scope explicitly rather than deriving it from checkbox state or silently treating an empty selection as all objects. Selection-driven bulk work can continue using normal Django actions. Preserve endpoint permission enforcement, POST/CSRF, authorized object lookup, intermediate responses, list state and correct form ownership with list_editable. Exact syntax remains proposed, not implemented.
 
-### JSON and filters
+### JSON
 
 The JSON widget changes presentation, not model field type, validation or storage. Implemented as a thin `AdminTextareaWidget` using `json.loads`/`json.dumps` in `format_value`, plus vanilla JS for highlighting, autosize, validation and an explicit reformat - the Fabriq reference shape. The earlier tokenizer and recursive pretty-printer in `jsonwidget/formatter.py` were removed rather than relocated.
 
@@ -104,7 +105,17 @@ Browser formatting must not silently change large integers, and this is the one 
 
 Readonly rendering is server-side escaped `<pre>` markup with the same token regex, and carries its own asset opt-in (`JSONReadonlyMixin`, a plain Django `class Media`), so a readonly-only admin depends on neither an editable widget nor the buttons mixin; without the stylesheet the text is still readable. XSS, missing-CSS, undo/selection, no-JS and oversized-input checks stay focused on observable behavior.
 
+### Filters
+
 Filters plug into ModelAdmin.list_filter and the authorized queryset. No generic query engine. Date boundaries/timezones and numeric input get focused behavior checks, not a new expression language.
+
+Range filters are implemented in `filters/ranges.py`: three `FieldListFilter` subclasses over one private base, plus a template and `filters.css`. Nothing is registered with `FieldListFilter.register`, so installing the app still changes no existing admin, and there is no mixin, setting or custom AdminSite. Each filter owns exactly two query parameters, `<field_path>__range__gte` and `__lte`, declared in `expected_parameters()` so the changelist hands them over instead of treating them as raw lookups.
+
+Bounds are parsed by Django form fields, not by our own parsing: `forms.DateField` / `forms.DateTimeField` for date-like columns - which already route through `from_current_timezone()` - and the model field's own `formfield()` for numbers, so precision, limits and the input step come from the column. A date range over a DateTimeField is `__gte` local midnight to `__lt` the next local midnight, rather than an inclusive bound on a chosen last instant. Timezone correctness is a behavior check against Django's own `__date` lookup, not an assertion about our arithmetic.
+
+Input the filter cannot read returns `queryset.none()` with the error rendered in the sidebar. That is deliberate: the filter runs after `ModelAdmin.get_queryset()`, so silently ignoring a bad bound would widen what is shown relative to what was asked for. Nothing raises, and the changelist's own `e=1` error path stays for Django's cases.
+
+Presentation stays inside the stock `<details data-filter-title>` shell; only the body is a GET form carrying the rest of the query string as hidden inputs. No JavaScript. The stylesheet is linked from the filter template because a ListFilter has no media hook - the changelist collects media from the ModelAdmin, not from its filters - and the form is usable without it.
 
 ### Management commands and background work
 
@@ -139,7 +150,7 @@ Queue only one bounded outcome at a time; these are proposed tasks, not dispatch
 1. **Independent Django-like buttons.** Implement the separate button decorator and changelist/changeform/row placement lists. Prove buttons never leak into the action dropdown, native actions stay intact, object handlers can be reused in two positions, and permission/CSRF/intermediate responses/list_editable work. No backend or branding changes.
    **Separate bounded cleanup before the consumer pilot:** done - JSON rendering was simplified against the Fabriq UX reference, removing the custom Python parser and the duplicated JS grammar rather than relocating them, closing the readonly-only asset gap, and restating the fidelity guarantee honestly in the README.
 2. **First consumer pilot.** Once the user supplies the application, install a local wheel and integrate one useful button and JSON field. Record integration friction; do not pull application business logic into the library. This feedback may reorder subsequent work.
-3. **Range filters.** One date range and one numeric range through list_filter, composed with search/permissions. Done when valid/invalid inputs and relevant timezone boundaries work. Choice filters are a following small slice, not a blocker for the first usable ranges.
+3. **Range filters.** Done, ahead of the consumer pilot: `DateRangeFilter`, `DateTimeRangeFilter` and `NumericRangeFilter` through list_filter, composed with search, ordering, the other filters and the admin's own queryset. Valid, partial, reversed and unreadable input and the active-timezone day boundaries are covered by behavior tests on Django 5.2 and 6.0, plus browser journeys for layout, narrow/dark and the missing-stylesheet fallback. Choice filters remain the following small slice.
 4. **Task-backend spike.** Execute one harmless allowed command on a real DB worker, then the same task on a Celery worker if available/authorized. Check failure and protected result retrieval, JSON payloads and transaction timing. State tested versions/capabilities. No permanent backend abstraction; backend recommendation follows evidence.
 5. **Minimal command runner.** Explicit registry, argument form, permitted launch and basic authorized status/output using the validated backend. Done when allowed and denied runs and worker failure are exercised. No persisted history dashboard, auto-retry policy or generic form builder.
 6. **Restrained branding.** Palette/logo/title with on/off checks for stock widgets, our editor, light/dark/auto and project overrides. No markup redesign.

@@ -3,23 +3,25 @@
 Before selecting or expanding any item, apply the **Philosophy fit** check in
 [PHILOSOPHY.md](PHILOSOPHY.md). These candidates do not override the project principles.
 
-This first slice deliberately ships two things well rather than ten things thinly:
-**buttons** and the **JSON field editor**. The items below are wanted, are not abandoned,
-and are simply not in this release.
+This first slice deliberately ships a few things well rather than ten things thinly:
+**buttons**, the **JSON field editor** and **date/numeric range filters**. The items below
+are wanted, are not abandoned, and are simply not in this release.
 
 ## Next
 
 The proposed module boundaries and bounded implementation waves are in
 [ARCHITECTURE.md](ARCHITECTURE.md). They are planning, not implemented features or
-a dispatched batch. Independent Django-like buttons and the simplified JSON widget are done
-and are described in the [README](README.md); the next outcome is the first consumer pilot.
+a dispatched batch. Independent Django-like buttons, the simplified JSON widget and the
+range filters are done and are described in the [README](README.md). Range filters landed
+ahead of the consumer pilot, which remains the next outcome and may still reorder the rest.
 
 - **First consumer pilot** - install the wheel in the user's application, integrate one
   button and one JSON field, and record the integration friction. This feedback may reorder
   everything below.
 - **Execution and styling design** - apply the accepted requirements and evaluate the native Django Tasks backend approach in [actions-and-task-execution.md](docs/decisions/actions-and-task-execution.md). Backend integrations remain unverified; customization must preserve stock-admin-dependent widgets and extensions.
 
-- **Filters** - usable date and numeric ranges, searchable/dropdown/multi-value choices.
+- **Choice filters** - searchable, dropdown and multi-value choices, the slice after the
+  shipped date and numeric ranges. Same rule: `list_filter` entries, no query engine.
 - **Advanced query search** - a richer changelist search alongside the basic filters.
 
 ## After that

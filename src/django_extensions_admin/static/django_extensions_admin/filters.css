@@ -1,6 +1,6 @@
-/* Range filters look like the rest of the filter sidebar: the admin's own variables, its
-   spacing, its narrow column. Without this file the form is still a usable pair of inputs
-   and a button - only the fit is lost. */
+/* Range and choice filters look like the rest of the filter sidebar: the admin's own
+   variables, its spacing, its narrow column. Without this file each form is still a usable
+   set of inputs and a button - only the fit is lost. */
 
 .admin-ext-range {
     margin: 0;
@@ -35,21 +35,24 @@
     border-radius: 4px;
 }
 
-.admin-ext-range-error {
+.admin-ext-range-error,
+.admin-ext-choice-error {
     display: block;
     margin-top: 2px;
     font-size: 0.75rem;
     color: var(--error-fg, #ba2121);
 }
 
-.admin-ext-range-actions {
+.admin-ext-range-actions,
+.admin-ext-choice-actions {
     display: flex;
     align-items: center;
     gap: 10px;
     margin: 8px 0 0;
 }
 
-.admin-ext-range-apply {
+.admin-ext-range-apply,
+.admin-ext-choice-apply {
     font-family: inherit;
     font-size: 0.75rem;
     line-height: 1.2;
@@ -62,11 +65,74 @@
 }
 
 .admin-ext-range-apply:hover,
-.admin-ext-range-apply:focus {
+.admin-ext-range-apply:focus,
+.admin-ext-choice-apply:hover,
+.admin-ext-choice-apply:focus {
     background: var(--button-hover-bg, #609ab6);
     border-color: var(--button-hover-bg, #609ab6);
 }
 
-.admin-ext-range-clear {
+.admin-ext-range-clear,
+.admin-ext-choice-clear {
     font-size: 0.75rem;
+}
+
+/* Choice filters. The checkbox list is the stock <ul>/<li> - its padding, its li.selected
+   marker - with a height limit, so a long list scrolls instead of pushing every other
+   filter down the page. The <select> keeps the admin's own select styling. */
+
+.admin-ext-choice {
+    margin: 0;
+    padding: 0 15px 8px;
+}
+
+#changelist-filter .admin-ext-choice-options {
+    max-height: 16rem;
+    overflow-y: auto;
+    margin: 0 -15px;
+    padding: 0 15px 4px;
+    border-bottom: none;
+}
+
+.admin-ext-choice-options label {
+    display: block;
+    padding: 1px 0;
+    color: var(--body-quiet-color, #666);
+    word-break: break-word;
+    cursor: pointer;
+}
+
+.admin-ext-choice-options li.selected label {
+    color: var(--link-selected-fg, #5b80b2);
+}
+
+.admin-ext-choice-options input[type="checkbox"] {
+    margin: 0 4px 0 0;
+    vertical-align: -1px;
+}
+
+.admin-ext-choice-select,
+.admin-ext-choice-search {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 14rem;
+}
+
+.admin-ext-choice-search {
+    display: block;
+    margin: 0 0 6px;
+    padding: 3px 6px;
+    font-family: inherit;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: var(--body-fg, #333);
+    background: var(--body-bg, #fff);
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 4px;
+}
+
+.admin-ext-choice-nomatch {
+    margin: 2px 0 0;
+    font-size: 0.75rem;
+    color: var(--body-quiet-color, #666);
 }

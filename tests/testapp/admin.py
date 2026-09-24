@@ -4,9 +4,11 @@ from django.contrib import admin
 from django.db import models
 
 from django_extensions_admin import (
+    ChoiceFilter,
     DateRangeFilter,
     DateTimeRangeFilter,
     JSONReadonlyMixin,
+    MultipleChoiceFilter,
     NumericRangeFilter,
     PrettyJSONWidget,
     readonly_json,
@@ -191,3 +193,49 @@ class UnstyledReadonlyReadingAdmin(admin.ModelAdmin):
 readonly_site = admin.AdminSite(name="readonly")
 readonly_site.register(Device, ReadonlyOnlyDeviceAdmin)
 readonly_site.register(Reading, UnstyledReadonlyReadingAdmin)
+
+
+class SearchableTagFilter(MultipleChoiceFilter):
+    """The search box normally waits for a long list; this one asks for it early."""
+
+    search_threshold = 2
+
+
+class ChoiceDeviceAdmin(admin.ModelAdmin):
+    """Choice filters over a choices field, an M2M and a plain column.
+
+    Archived devices are not part of this admin at all, so no filter may bring them back.
+    """
+
+    list_display = ("name", "region", "kind")
+    list_filter = (
+        ("kind", ChoiceFilter),
+        ("tags", SearchableTagFilter),
+        ("region", MultipleChoiceFilter),
+    )
+    search_fields = ("name",)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(archived=False)
+
+
+class ChoiceReadingAdmin(admin.ModelAdmin):
+    """A single choice over a foreign key, multiple choices over a nullable one, through a
+    relation and over an integer - which also carries a range filter of its own."""
+
+    list_display = ("sequence", "device", "tag")
+    list_filter = (
+        ("device", ChoiceFilter),
+        ("tag", MultipleChoiceFilter),
+        ("device__region", MultipleChoiceFilter),
+        ("sequence", MultipleChoiceFilter),
+        ("sequence", NumericRangeFilter),
+        "device__archived",
+    )
+    search_fields = ("device__name",)
+    list_per_page = 2
+
+
+choices_site = admin.AdminSite(name="choices")
+choices_site.register(Device, ChoiceDeviceAdmin)
+choices_site.register(Reading, ChoiceReadingAdmin)

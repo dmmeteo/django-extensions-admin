@@ -1,4 +1,4 @@
-"""Our admin namespace: ``admin.button``, ``admin.ButtonsMixin``, the range filters.
+"""Our admin namespace: ``admin.button``, ``admin.ButtonsMixin``, the filters.
 
     from django.contrib import admin
     from django_extensions_admin import admin as extensions_admin
@@ -10,12 +10,20 @@ a small namespace for this package's own API - not a proxy, mirror or monkey pat
 """
 
 from .buttons import ButtonsMixin, button
-from .filters import DateRangeFilter, DateTimeRangeFilter, NumericRangeFilter
+from .filters import (
+    ChoiceFilter,
+    DateRangeFilter,
+    DateTimeRangeFilter,
+    MultipleChoiceFilter,
+    NumericRangeFilter,
+)
 
 __all__ = [
     "ButtonsMixin",
+    "ChoiceFilter",
     "DateRangeFilter",
     "DateTimeRangeFilter",
+    "MultipleChoiceFilter",
     "NumericRangeFilter",
     "button",
 ]

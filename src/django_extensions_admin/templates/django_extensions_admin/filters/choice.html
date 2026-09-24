@@ -1,0 +1,43 @@
+{% load i18n static %}
+{% comment %}
+A choice filter: the stock <details>/<summary> shell around a GET form, like the range
+filters. A dropdown is one <select>; several values are checkboxes in the stock <ul>/<li>
+markup, so li.selected looks exactly like a selected stock filter link. Checkboxes and the
+select repeat Django's own parameter name, so several values arrive as a repeated key,
+never joined into one.
+
+Assets are linked here because a ListFilter has no media hook. The script only adds a
+search box over the options that are already on the page; the form works without it, and
+it is written to run once per form however many times the tag appears.
+{% endcomment %}
+<link rel="stylesheet" href="{% static 'django_extensions_admin/filters.css' %}">
+<script src="{% static 'django_extensions_admin/choice-filters.js' %}" defer></script>
+<details data-filter-title="{{ title }}" open>
+  <summary>
+    {% blocktranslate with filter_title=title %} By {{ filter_title }} {% endblocktranslate %}
+  </summary>
+  {% for choice in choices %}
+  <form class="admin-ext-choice" method="get" action=""{% if choice.searchable %} data-admin-ext-choice-search="{% translate 'Search options' %}" data-admin-ext-choice-nomatch="{% translate 'No matching options' %}"{% endif %}>
+    {% for name, value in choice.carried_params %}<input type="hidden" name="{{ name }}" value="{{ value }}">
+    {% endfor %}
+    {% if choice.multiple %}
+    <ul class="admin-ext-choice-options">
+      {% for option in choice.options %}
+      <li{% if option.selected %} class="selected"{% endif %}><label><input type="checkbox" name="{{ option.name }}" value="{{ option.value }}"{% if option.selected %} checked{% endif %}> {{ option.label }}</label></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <select class="admin-ext-choice-select" name="{{ choice.name }}" aria-label="{{ title }}">
+      <option value="">{% translate "All" %}</option>
+      {% for option in choice.options %}<option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+      {% endfor %}
+    </select>
+    {% endif %}
+    {% if choice.unrecognised %}<p class="admin-ext-choice-error">{% translate "A selected value is not one of the choices." %}</p>{% endif %}
+    <p class="admin-ext-choice-actions">
+      <button type="submit" class="admin-ext-choice-apply">{% translate "Apply" %}</button>
+      {% if choice.is_active %}<a class="admin-ext-choice-clear" href="{{ choice.clear_url|iriencode }}">{% translate "Clear" %}</a>{% endif %}
+    </p>
+  </form>
+  {% endfor %}
+</details>

@@ -182,7 +182,7 @@
     ];
 
     function maxChars(textarea) {
-        return Number(textarea.dataset.adminExtMaxChars || 100000);
+        return Number(textarea.dataset.adminExtMaxChars || 200000);
     }
 
     function indentOf(textarea) {

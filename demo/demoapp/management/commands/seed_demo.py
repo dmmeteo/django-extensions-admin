@@ -163,7 +163,7 @@ class Command(BaseCommand):
         Reading.objects.create(
             device=device,
             label="large payload (plain mode)",
-            payload={"rows": [{"i": i, "blob": "x" * 64, "v": rng.random()} for i in range(1200)]},
+            payload={"rows": [{"i": i, "blob": "x" * 64, "v": rng.random()} for i in range(2400)]},
         )
         Reading.objects.create(device=device, label="empty object", payload={})
 

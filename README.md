@@ -217,7 +217,7 @@ JSON needs neither `PrettyJSONWidget` nor the buttons mixin.
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `JSON_WIDGET_DEFAULT` | `False` | Install the widget as the admin-wide default for `models.JSONField`. |
-| `JSON_MAX_PRETTY_CHARS` | `100000` | Above this, the value is shown exactly as stored and highlighting is off. |
+| `JSON_MAX_PRETTY_CHARS` | `200000` | Above this, the value is shown exactly as stored and highlighting is off. |
 | `JSON_INDENT` | `2` | Indentation used when re-indenting. |
 | `JSON_REFORMAT_ON_BLUR` | `False` | Re-indent the field when it loses focus. Off, because it moves the caret. |
 
@@ -781,7 +781,7 @@ Loopback only, a disposable SQLite file, and entirely generated data. The demo s
 button placement (changelist, change form, row, one handler in two places, and one denied
 by permission) and
 the JSON cases worth seeing: nested values, Unicode, numbers JavaScript cannot represent,
-HTML-looking strings, a >100 KB payload in plain mode, and a read-only rendering. Readings
+HTML-looking strings, a >200 KB payload in plain mode, and a read-only rendering. Readings
 and devices carry dates, instants and numbers for the range filters, with sightings just
 after and just before local midnight so the timezone boundary is visible. Devices also
 have a region dropdown and status and tag checkbox lists. There are fifteen tags,

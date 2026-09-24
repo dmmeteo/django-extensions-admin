@@ -150,7 +150,7 @@ class JSONWidgetBrowserTests(BrowserTestCase):
             }"""
         )
         self.assertTrue(state["plain"])
-        self.assertGreater(state["length"], 100000)
+        self.assertGreater(state["length"], 200_000)
         self.assertNotEqual(state["color"], "rgba(0, 0, 0, 0)")
         self.shot(page, "json-oversized-plain")
 

@@ -16,7 +16,7 @@ DEFAULTS: dict[str, Any] = {
     # until the project asks for it.
     "JSON_WIDGET_DEFAULT": False,
     # Values longer than this are rendered exactly as stored, with highlighting off.
-    "JSON_MAX_PRETTY_CHARS": 100_000,
+    "JSON_MAX_PRETTY_CHARS": 200_000,
     "JSON_INDENT": 2,
     # Rewrite the field when it loses focus. Off by default: reformatting moves the
     # caret and interrupts native undo. The explicit "Format" control always works.

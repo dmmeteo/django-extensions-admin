@@ -3,6 +3,7 @@
 import html as html_module
 import json
 import re
+from pathlib import Path
 
 from django import forms
 from django.contrib import admin
@@ -12,6 +13,7 @@ from django.forms import JSONField as JSONFormField
 from django.test import RequestFactory, TestCase, override_settings
 
 from django_extensions_admin import PrettyJSONWidget
+from django_extensions_admin.conf import DEFAULTS
 from django_extensions_admin.jsonwidget.readonly import render_json
 
 from .testapp.models import Device, Reading
@@ -102,6 +104,55 @@ class FormatValueTests(TestCase):
         ):
             with self.subTest(asset=asset):
                 self.assertIsNotNone(finders.find(asset))
+
+
+def compact_json_of_length(length):
+    """A compact JSON object whose text is exactly *length* characters."""
+    text = '{"blob": "' + "x" * (length - 12) + '"}'
+    assert len(text) == length
+    return text
+
+
+class ThresholdTests(TestCase):
+    """Plain mode starts above 200,000 characters unless a project or widget says otherwise."""
+
+    def test_the_default_is_200_000_characters(self):
+        self.assertEqual(DEFAULTS["JSON_MAX_PRETTY_CHARS"], 200_000)
+        html = PrettyJSONWidget().render("payload", "{}", attrs={"id": "id_payload"})
+        self.assertIn('data-admin-ext-max-chars="200000"', html)
+
+    def test_the_script_falls_back_to_the_same_default(self):
+        script = Path(finders.find("django_extensions_admin/json-widget.js")).read_text()
+        fallback = re.search(r"adminExtMaxChars \|\| (\d+)", script).group(1)
+        self.assertEqual(int(fallback), DEFAULTS["JSON_MAX_PRETTY_CHARS"])
+
+    def test_the_widget_indents_up_to_the_threshold_and_is_plain_above_it(self):
+        widget = PrettyJSONWidget()
+        at_limit = compact_json_of_length(200_000)
+        above = compact_json_of_length(200_001)
+        self.assertTrue(widget.format_value(at_limit).startswith('{\n  "blob"'))
+        self.assertEqual(widget.format_value(above), above)
+
+    def test_readonly_rendering_uses_the_same_threshold(self):
+        self.assertNotIn("--plain", render_json(compact_json_of_length(200_000)))
+        self.assertIn(
+            "admin-ext-json-readonly--plain", render_json(compact_json_of_length(200_001))
+        )
+
+    @override_settings(ADMIN_EXTENSIONS={"JSON_MAX_PRETTY_CHARS": 100_000})
+    def test_a_project_can_still_lower_it(self):
+        value = compact_json_of_length(150_000)
+        widget = PrettyJSONWidget()
+        self.assertEqual(widget.format_value(value), value)
+        self.assertIn('data-admin-ext-max-chars="100000"', widget.render("p", "{}"))
+        self.assertIn("admin-ext-json-readonly--plain", render_json(value))
+
+    @override_settings(ADMIN_EXTENSIONS={"JSON_MAX_PRETTY_CHARS": 100_000})
+    def test_a_widget_argument_still_wins_over_the_setting(self):
+        value = compact_json_of_length(150_000)
+        widget = PrettyJSONWidget(max_pretty_chars=300_000)
+        self.assertNotEqual(widget.format_value(value), value)
+        self.assertNotIn("--plain", render_json(value, max_pretty_chars=300_000))
 
 
 class NativeValidationTests(TestCase):

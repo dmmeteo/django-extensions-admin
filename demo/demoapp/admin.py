@@ -1,5 +1,6 @@
 """Demo admin: every button placement and every JSON case in one place."""
 
+from django import forms
 from django.contrib import admin
 
 from django_extensions_admin import (
@@ -8,10 +9,12 @@ from django_extensions_admin import (
     DateTimeRangeFilter,
     MultipleChoiceFilter,
     NumericRangeFilter,
+    commands,
     readonly_json,
 )
 from django_extensions_admin import admin as extensions_admin
 
+from .management.commands.seed_demo import REGIONS
 from .models import Device, Reading
 
 
@@ -121,3 +124,25 @@ class ReadingAdmin(admin.ModelAdmin):
         ("device", ChoiceFilter),
     )
     search_fields = ("label",)
+
+
+# --- management commands ----------------------------------------------------------------
+# Field names are the command's option names; cleaned_data becomes call_command(**...).
+# Registered in admin.py so the task worker, which also autodiscovers admin modules,
+# checks the same registration before it runs anything.
+
+
+class DemoReportForm(forms.Form):
+    region = forms.ChoiceField(
+        choices=[("", "All regions"), *((r, r) for r in REGIONS)], required=False
+    )
+    list_devices = forms.BooleanField(label="List every device", required=False)
+    note = forms.CharField(required=False, max_length=500, help_text="Printed verbatim.")
+
+
+commands.register(
+    "demo_report",
+    form=DemoReportForm,
+    permission="demoapp.run_demo_report",
+    description="Device report",
+)

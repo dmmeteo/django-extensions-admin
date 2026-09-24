@@ -18,6 +18,12 @@ class AdminExtensionsConfig(AppConfig):
 
         if get_setting("JSON_WIDGET_DEFAULT"):
             install_json_widget_default()
+        # Silent unless ADMIN_EXTENSIONS["BRANDING"] is configured.
+        from django.core import checks
+
+        from .branding import check_branding
+
+        checks.register(check_branding)
 
 
 def declares_own_json_widget(model_admin) -> bool:

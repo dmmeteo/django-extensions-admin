@@ -30,6 +30,10 @@ DEFAULTS: dict[str, Any] = {
     "COMMANDS_OUTPUT_LIMIT": 20_000,
     # Seconds after which a queued or running command is reported as possibly stuck.
     "COMMANDS_STALE_AFTER": 30 * 60,
+    # Logo and colours for the admin header (django_extensions_admin.branding). Read only
+    # by the branding template, which a project adopts in its own admin/base_site.html;
+    # the setting alone changes nothing.
+    "BRANDING": None,
 }
 
 

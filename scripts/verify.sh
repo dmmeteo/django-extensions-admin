@@ -111,6 +111,9 @@ required = [
     "django_extensions_admin/templates/django_extensions_admin/commands/index.html",
     "django_extensions_admin/templates/django_extensions_admin/commands/launch.html",
     "django_extensions_admin/templates/django_extensions_admin/commands/result.html",
+    "django_extensions_admin/static/django_extensions_admin/branding.css",
+    "django_extensions_admin/templates/django_extensions_admin/branding/base_site.html",
+    "django_extensions_admin/templatetags/admin_ext_branding.py",
 ]
 missing = [name for name in required if name not in names]
 print("\n".join(sorted(names)))
@@ -230,6 +233,10 @@ assert errors == ["django_extensions_admin.E101"], errors
 for name in ("index", "launch", "result"):
     get_template(f"django_extensions_admin/commands/{name}.html")
 assert finders.find("django_extensions_admin/commands.css")
+# Branding is a template a project extends; unadopted, it renders nothing and checks nothing.
+get_template("django_extensions_admin/branding/base_site.html")
+assert finders.find("django_extensions_admin/branding.css"), "staticfiles cannot find it"
+assert not [m for m in checks.run_checks() if m.id.startswith("django_extensions_admin.E2")]
 print(f"import smoke OK: django_extensions_admin {pkg.__version__} from {root}")
 PY
 ) | tee "$ART/smoke-install.txt"

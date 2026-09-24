@@ -1,0 +1,25 @@
+{% extends "admin/base_site.html" %}
+{% load static admin_ext_branding %}
+{% comment %}
+Adopted by a project's own admin/base_site.html, which extends this template.
+The <style> asks for the CSP nonce when Django 6.0+ CSP support provides one.
+
+Two additive blocks, both keeping block.super; title and header text stay the AdminSite's.
+The palette sits in dark-mode-vars: after Django's own variables and before extrastyle,
+which is where a project's own CSS goes. The selectors are the ones Django's stylesheets
+use, so a project rule with the same selector, loaded later, wins.
+{% endcomment %}
+
+{% block dark-mode-vars %}{{ block.super }}{% admin_ext_branding as branding %}{% if branding.logo_url %}<link rel="stylesheet" href="{% static "django_extensions_admin/branding.css" %}">
+{% endif %}{% if branding.every_theme or branding.light or branding.dark %}<style{% if csp_nonce is not None %} nonce="{{ csp_nonce }}"{% endif %}>
+{% if branding.every_theme %}html[data-theme="light"], :root { {% for name, value in branding.every_theme.items %}--{{ name }}: {{ value }}; {% endfor %}}
+{% endif %}{% if branding.light %}html[data-theme="light"] { {% for name, value in branding.light.items %}--{{ name }}: {{ value }}; {% endfor %}}
+@media (prefers-color-scheme: light) { :root { {% for name, value in branding.light.items %}--{{ name }}: {{ value }}; {% endfor %}} }
+{% endif %}{% if branding.dark %}html[data-theme="dark"] { {% for name, value in branding.dark.items %}--{{ name }}: {{ value }}; {% endfor %}}
+@media (prefers-color-scheme: dark) { :root { {% for name, value in branding.dark.items %}--{{ name }}: {{ value }}; {% endfor %}} }
+{% endif %}</style>
+{% endif %}{% endblock %}
+
+{% block branding %}{% admin_ext_branding as branding %}{% if branding.logo_url %}
+<img class="admin-ext-brand-logo" src="{{ branding.logo_url }}" alt="{{ branding.logo_alt }}" height="32">
+{% endif %}{{ block.super }}{% endblock %}

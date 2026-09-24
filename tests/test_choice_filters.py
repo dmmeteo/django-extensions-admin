@@ -4,6 +4,7 @@ rather than join values into one, and never widen the admin's own queryset."""
 
 from urllib.parse import urlencode
 
+from django.contrib import admin
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
 from django.test import RequestFactory, TestCase
@@ -160,6 +161,20 @@ class MultipleChoiceTests(ChoiceFilterTestCase):
         self.assertEqual(spec.empty_label, "Unclassified")
         self.assertEqual(list(spec.queryset(None, Device.objects.all())), [self.three])
         self.assertEqual(spec.expected_parameters(), ["kind__exact", "kind__isnull"])
+
+    def test_a_reverse_many_to_many_relation_works_too(self):
+        """Tags filtered by the devices that carry them; a tag on no device is "empty"."""
+        tag_admin = admin.ModelAdmin(Tag, choices_site)
+        spec = build_filter(
+            MultipleChoiceFilter,
+            tag_admin,
+            "devices",
+            ("devices__id__exact", self.two.pk),
+            ("devices__isnull", "True"),
+        )
+        found = spec.queryset(None, Tag.objects.all()).values_list("name", flat=True)
+        self.assertEqual(sorted(found), ['50% «ü» "q"', "beta"])
+        self.assertIn((self.two.pk, "two"), spec.options)
 
     def test_a_path_through_a_relation_offers_the_related_values(self):
         found = self.sequences(url(READINGS, ("device__region", "us"), ("device__region", "ap")))

@@ -1,6 +1,6 @@
 # Architecture proposal
 
-Status: architecture direction accepted by the user, including the independent `admin.button` API with `changelist_buttons`, `changeform_buttons` and `row_buttons`, and the simpler Fabriq-style JSON widget direction. Both are now implemented; the JSON simplification below describes shipped behavior. The range filters of wave 3 are implemented too, and the Filters section below describes what ships rather than a proposal. Local decomposition remains revisable; backend/REPL questions below remain open. This is not a description of shipped features or authorization to implement the entire roadmap. Approval reference: Discord message 1551266173528703077.
+Status: architecture direction accepted by the user, including the independent `admin.button` API with `changelist_buttons`, `changeform_buttons` and `row_buttons`, and the simpler Fabriq-style JSON widget direction. Both are now implemented; the JSON simplification below describes shipped behavior. The range filters of wave 3 and the choice filters after them are implemented too, and the Filters section below describes what ships rather than a proposal. Local decomposition remains revisable; backend/REPL questions below remain open. This is not a description of shipped features or authorization to implement the entire roadmap. Approval reference: Discord message 1551266173528703077.
 
 Scope: django-extensions-admin, the reusable library. The user's upcoming application is its first consumer, not the subject of this architecture. Its repository and requirements are not yet supplied.
 
@@ -50,8 +50,9 @@ src/django_extensions_admin/
 │   ├── widgets.py              thin Python widget and initial rendering
 │   └── readonly.py             escaped readonly output and its own stylesheet opt-in
 ├── filters/                    range and choice filters using list_filter
+│   ├── query.py                what a sidebar filter form carries from the changelist
 │   ├── ranges.py               date/numeric filtering: three list_filter classes
-│   └── choices.py            + searchable/multiple-value choice filtering
+│   └── choices.py              one-value dropdown and same-field multiple choice
 ├── commands/                 + allowlisted management-command UI
 │   ├── registry.py           + explicit command definitions, forms, permissions
 │   ├── forms.py              + shared Django form behavior if actually needed
@@ -61,14 +62,15 @@ src/django_extensions_admin/
 ├── branding.py               + small validated palette/branding configuration
 ├── templates/django_extensions_admin/
 │   ├── buttons/
-│   ├── filters/                the range filter body inside the stock <details> shell
+│   ├── filters/                range and choice bodies inside the stock <details> shell
 │   ├── commands/            +
 │   └── branding/            + narrow additive blocks
 └── static/django_extensions_admin/
     ├── buttons.css
     ├── json-widget.css
     ├── json-widget.js
-    ├── filters.css            sidebar fit for the range inputs; the form works without it
+    ├── filters.css            sidebar fit for the filter forms; each works without it
+    ├── choice-filters.js      search over already-rendered options; optional
     └── branding.css         + optional scoped/theme-variable overrides
 
 demo/                          ordinary Django consumer with generated data
@@ -117,6 +119,14 @@ Input the filter cannot read returns `queryset.none()` with the error rendered i
 
 Presentation stays inside the stock `<details data-filter-title>` shell; only the body is a GET form carrying the rest of the query string as hidden inputs. No JavaScript. The stylesheet is linked from the filter template because a ListFilter has no media hook - the changelist collects media from the ModelAdmin, not from its filters - and the form is usable without it.
 
+Choice filters are implemented in `filters/choices.py`: `ChoiceFilter` (one value, a `<select>`) and `MultipleChoiceFilter` (several values of one field ORed, a checkbox list in the stock `<ul>`/`li.selected` markup) over one private base. The field category is resolved once: relations take their options from `field.get_choices()` in the related admin's ordering, fields with choices from `flatchoices`, and plain char/integer/decimal/UUID columns from the admin's own distinct values, as `AllValuesFieldListFilter` does. Any other field raises `ImproperlyConfigured`. Nothing is registered.
+
+Parameters are Django's own for each category (`<path>__<pk>__exact`, `<path>__exact`, `<path>`, plus `<path>__isnull` for the empty choice), and several values are a repeated key. Django 5.0+ already hands filters list-valued params and ORs a repeated key in its own filters, so this needs no parsing of ours, keeps values with commas intact (unlike the documented comma-separated `__in`), and leaves bookmarks valid after a project swaps back to the stock filter. The query is one `filter()` with `__in` ORed with `__isnull`, so a multi-valued relation joins once and the changelist's own `lookup_spawns_duplicates` de-duplication applies. A dropdown has one parameter name and cannot also send `__isnull`, so `ChoiceFilter` has no empty choice rather than an invented sentinel, and it reads only the last value it is given.
+
+Values are parsed with the lookup target's own `to_python`. One it cannot read matches nothing, an `__isnull` other than true is not reinterpreted as "not empty", and when nothing readable remains the result is `queryset.none()`. Nothing raises. A sidebar note says a value is not one of the choices, so the control never claims "All" over a filtered list. Clear deletes its exact keys through `get_query_string({key: None})`, because `remove=` matches by prefix. The carried-query rule is shared with the range filters in `filters/query.py`.
+
+Option search is `choice-filters.js`, the only script in the filters. It is linked from the template, idempotent per form because the tag repeats per filter, and runs only on forms whose option count the server judged longer than `search_threshold`. It hides non-matching options already on the page and never changes the selection or submits anything. Without it, the forms are unchanged.
+
 ### Management commands and background work
 
 Flow: AdminSite view -> explicit registry + Django form + permission check -> enqueue configured Django Task -> worker revalidates registered command/options -> Django call_command -> bounded result.
@@ -150,7 +160,7 @@ Queue only one bounded outcome at a time; these are proposed tasks, not dispatch
 1. **Independent Django-like buttons.** Implement the separate button decorator and changelist/changeform/row placement lists. Prove buttons never leak into the action dropdown, native actions stay intact, object handlers can be reused in two positions, and permission/CSRF/intermediate responses/list_editable work. No backend or branding changes.
    **Separate bounded cleanup before the consumer pilot:** done - JSON rendering was simplified against the Fabriq UX reference, removing the custom Python parser and the duplicated JS grammar rather than relocating them, closing the readonly-only asset gap, and restating the fidelity guarantee honestly in the README.
 2. **First consumer pilot.** Once the user supplies the application, install a local wheel and integrate one useful button and JSON field. Record integration friction; do not pull application business logic into the library. This feedback may reorder subsequent work.
-3. **Range filters.** Done, ahead of the consumer pilot: `DateRangeFilter`, `DateTimeRangeFilter` and `NumericRangeFilter` through list_filter, composed with search, ordering, the other filters and the admin's own queryset. Valid, partial, reversed and unreadable input and the active-timezone day boundaries are covered by behavior tests on Django 5.2 and 6.0, plus browser journeys for layout, narrow/dark and the missing-stylesheet fallback. Choice filters remain the following small slice.
+3. **Range filters.** Done, ahead of the consumer pilot: `DateRangeFilter`, `DateTimeRangeFilter` and `NumericRangeFilter` through list_filter, composed with search, ordering, the other filters and the admin's own queryset. Valid, partial, reversed and unreadable input and the active-timezone day boundaries are covered by behavior tests on Django 5.2 and 6.0, plus browser journeys for layout, narrow/dark and the missing-stylesheet fallback. Choice filters followed as the next small slice and are done too: `ChoiceFilter` and `MultipleChoiceFilter`, with same-field OR as repeated Django parameters, M2M de-duplication, tampered-value handling, facets and optional option search. They are covered by behavior tests on Django 5.2 and 6.0 and by browser journeys for the dropdown, OR, composition, Clear, no-JS, search and narrow/dark layout.
 4. **Task-backend spike.** Execute one harmless allowed command on a real DB worker, then the same task on a Celery worker if available/authorized. Check failure and protected result retrieval, JSON payloads and transaction timing. State tested versions/capabilities. No permanent backend abstraction; backend recommendation follows evidence.
 5. **Minimal command runner.** Explicit registry, argument form, permitted launch and basic authorized status/output using the validated backend. Done when allowed and denied runs and worker failure are exercised. No persisted history dashboard, auto-retry policy or generic form builder.
 6. **Restrained branding.** Palette/logo/title with on/off checks for stock widgets, our editor, light/dark/auto and project overrides. No markup redesign.

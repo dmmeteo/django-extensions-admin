@@ -1,7 +1,7 @@
 # django-extensions-admin
 
 Small, additive utilities for the Django admin you already have: **buttons**, a
-**JSON field editor** and **range filters**. No redesign, no base class you must inherit
+**JSON field editor**, **range filters** and **choice filters**. No redesign, no base class you must inherit
 everywhere, no build step, no runtime dependency beyond Django.
 
 > **Independent project.** Inspired by the spirit of `django-extensions`, but not
@@ -350,6 +350,97 @@ stored state and no data format of ours anywhere - bookmarked URLs simply stop f
 Django's own `DateFieldListFilter` and `admin.EmptyFieldListFilter` are drop-in
 replacements for part of it if you want to keep something.
 
+## Choice filters
+
+A compact dropdown for one value, or a checkbox list for several values of the same field,
+ORed together. Both are ordinary `list_filter` entries. Nothing is registered globally.
+
+```python
+from django.contrib import admin
+from django_extensions_admin import ChoiceFilter, MultipleChoiceFilter
+
+@admin.register(Device)
+class DeviceAdmin(admin.ModelAdmin):
+    list_filter = [
+        ("region", ChoiceFilter),          # one value, from a <select>
+        ("status", MultipleChoiceFilter),  # any of several values
+        ("tags", MultipleChoiceFilter),    # works across many-to-many, one row per device
+        "archived",
+    ]
+```
+
+Selecting two tags lists the devices that carry either one. Values of *different* fields
+still narrow each other, as every other filter does.
+
+| Field | Options | Query parameter |
+| --- | --- | --- |
+| `ForeignKey`, `OneToOneField`, `ManyToManyField`, reverse relations | the related objects, in the related admin's ordering | `<field>__<pk>__exact`, plus `<field>__isnull` for the empty choice |
+| Any field with `choices` | the field's choices | `<field>__exact`, plus `<field>__isnull` when `None` is a choice |
+| `CharField`, `IntegerField`, `DecimalField`, `UUIDField` without choices | the distinct values in the admin's own queryset | `<field>`, plus `<field>__isnull` when a row is `NULL` |
+
+These are Django's own parameter names, the ones its default filter for that field uses.
+Several values arrive as a repeated key, `?status=idle&status=running`. Values are never
+joined into one comma-separated string, so a value containing a comma, `&`, `%` or quotes
+stays one value. A path through a relation (`"device__region"`) works the same way. Any
+other field type (dates, booleans, JSON, text, floats) raises `ImproperlyConfigured` when
+the changelist builds its filters, naming the class and the field. Dates have the range
+filters, and booleans are already compact in Django's default filter.
+
+Each filter is a GET form with an **Apply** button, in the stock sidebar markup. The
+checkbox list is the stock `<ul>`, and a selected row gets the stock `selected` marker. The
+form carries the rest of the query string (search, ordering, other filters) and drops the
+page number. **Clear** removes exactly that filter's own parameters. It leaves alone a
+range filter on the same column (`sequence` vs `sequence__range__gte`). With `show_facets`,
+each option shows its count.
+
+### Search over long lists
+
+A filter with more than 10 options gets a search box above them. It hides the options that
+don't match; the selection itself doesn't change, so a checked box you've searched out of
+view is still submitted. It is a small vanilla script, `choice-filters.js`, and it only
+searches options already on the page: no request, no autocomplete endpoint. Without
+JavaScript there's no search box, and both filters work exactly the same. To change the
+threshold, subclass:
+
+```python
+class TagFilter(MultipleChoiceFilter):
+    search_threshold = 0  # always offer search
+```
+
+### What each filter reads
+
+- **`MultipleChoiceFilter`** reads every value of its parameter and ORs them. It also
+  offers the field's empty choice, shown with the admin's empty-value display (or the label
+  of a `None` choice), as one more box.
+- **`ChoiceFilter`** reads one value. When the URL repeats the key, it uses the last one,
+  which is the one the dropdown can show. It has no empty choice: a `<select>` sends one
+  parameter, and "empty" is a different parameter in Django. Use `MultipleChoiceFilter` or
+  Django's `admin.EmptyFieldListFilter` for that.
+- An empty value is the dropdown's own **All**, so blank strings are not offered as an
+  option in either filter. `admin.EmptyFieldListFilter` covers them.
+
+### Values it cannot offer
+
+None of these raises or redirects, and none of them widens the result. The filter runs on
+the queryset your `ModelAdmin` already authorized, so it can only take rows away.
+
+| Input | What happens |
+| --- | --- |
+| A value the field cannot read (`?tags__id__exact=nope`) | Matches nothing. Alone, the list is empty. |
+| An unreadable value next to readable ones | The readable ones still apply. The unreadable one adds no rows. |
+| A readable value that is not an offered option | It is filtered exactly like any other value, which usually means no rows. |
+| `<field>__isnull` with anything but `True`/`1` | Matches nothing. It doesn't mean "not empty", which ORed with the rest would mean nearly everything. |
+
+In every one of these cases the sidebar says "A selected value is not one of the choices."
+and shows **Clear**, so the widget never claims "All" while the list is filtered.
+
+### Removing choice filters
+
+Replace `("status", MultipleChoiceFilter)` with `"status"`. There is no model field, no
+migration and no stored state. Bookmarked URLs keep working, because the parameter names are
+Django's and Django also ORs a repeated key. The one exception is "empty" together with a
+value, which Django's own filter reads as both at once and therefore matches nothing.
+
 ## Demo
 
 ```bash
@@ -364,7 +455,10 @@ by permission) and
 the JSON cases worth seeing: nested values, Unicode, numbers JavaScript cannot represent,
 HTML-looking strings, a >100 KB payload in plain mode, and a read-only rendering. Readings
 and devices carry dates, instants and numbers for the range filters, with sightings just
-after and just before local midnight so the timezone boundary is visible.
+after and just before local midnight so the timezone boundary is visible. Devices also
+have a region dropdown and status and tag checkbox lists. There are fifteen tags,
+including `r&d` and `rack 4, bay 2`, enough to bring up the search box. On Readings you pick
+the device from a searchable dropdown.
 
 `DEMO_PORT=9000 bash scripts/demo.sh` changes the port.
 
@@ -407,6 +501,14 @@ and Safari are untested.
   ("last 7 days" is Django's own `DateFieldListFilter`), no `__in` lists, no query builder.
 - Range filters show no facet counts. Django's counts are per choice, and a range is not a
   list of choices; `show_facets` still works for every other filter on the page.
+- Choice filters pick values; they do not build queries. No AND mode within one field,
+  no dependent filters, no remote autocomplete, no "only values in use" variant for
+  relations (every related object is offered, as in Django's `RelatedFieldListFilter`).
+- A choice filter renders every option into the page. The search box keeps a long list
+  usable, but thousands of related objects are still thousands of options. For that, use
+  Django's `RelatedOnlyFieldListFilter` or search.
+- Hiding `<option>`s in a search is honoured by Chromium, which the gate runs. Other
+  browsers are untested and may show every option; the dropdown still works.
 - `<input type="date">` and `<input type="datetime-local">` are the browser's own controls.
   Their displayed format follows the browser's locale rather than Django's, and a browser
   without them falls back to a text field that wants `YYYY-MM-DD`.

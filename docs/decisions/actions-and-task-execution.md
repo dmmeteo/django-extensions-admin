@@ -12,6 +12,8 @@ User clarification supersedes the shared-action proposal: buttons need a separat
 
 ## Styling compatibility: accepted requirement
 
+*Shipped as restrained branding (README "Branding", ARCHITECTURE "Branding"). The on/off comparison below is covered on the stock admin for Django 5.2 and 6.0. No third-party integration has been tested, so none is named as supported.*
+
 Light customization must preserve extensions that depend on stock admin styles. Django documents CSS variables for colors/fonts and additive template blocks with `block.super`, including its light/dark handling.[8]
 
 Proposed guardrails: use documented admin CSS variables for a small palette and native AdminSite title/header settings; add a logo through a narrow branding block. Keep stock stylesheets, DOM hooks, block contents and theme switching. Namespace component CSS; avoid global resets, broad element overrides, forced dimensions, font-metric changes and `!important` escalation. Styling is optional and independently disableable; buttons and JSON must still work without the polish module.

@@ -5,7 +5,8 @@ Before selecting or expanding any item, apply the **Philosophy fit** check in
 
 This first slice deliberately ships a few things well rather than ten things thinly:
 **buttons**, the **JSON field editor**, **date/numeric range filters**, **choice
-filters** and a minimal, opt-in **management-command runner**. The items below
+filters**, a minimal, opt-in **management-command runner** and opt-in **restrained
+branding**. The items below
 are wanted, are not abandoned, and are simply not in this release.
 
 ## Next
@@ -13,8 +14,8 @@ are wanted, are not abandoned, and are simply not in this release.
 The proposed module boundaries and bounded implementation waves are in
 [ARCHITECTURE.md](ARCHITECTURE.md). They are planning, not implemented features or
 a dispatched batch. Independent Django-like buttons, the simplified JSON widget, the
-range filters, the choice filters and the minimal command runner are done and are described
-in the [README](README.md).
+range filters, the choice filters, the minimal command runner and restrained branding are
+done and are described in the [README](README.md).
 Both filter slices landed ahead of the consumer pilot, which remains the next outcome and
 may still reorder the rest.
 
@@ -27,8 +28,9 @@ may still reorder the rest.
   need minimal metadata persistence. That stays a separate product decision, taken only if
   a consumer needs it. The Celery adapter stays deferred
   ([decision note](docs/decisions/actions-and-task-execution.md)).
-- **Styling design** - apply the accepted styling requirements in the same note;
-  customization must preserve stock-admin-dependent widgets and extensions.
+- **Branding, next steps** - the logo and allowlisted palette ship, tested on the stock
+  admin only. Naming a third-party admin integration as compatible needs its own test
+  first. Per-site branding waits for a consumer that needs it.
 
 - **Advanced query search** - a richer changelist search alongside the basic filters.
 
@@ -38,8 +40,6 @@ may still reorder the rest.
   a task runner the project already has. Execution matters more than a jobs
   dashboard. No implicit authorisation of arbitrary commands, and nothing that implies
   sandboxing.
-- **Light polish** - narrowly scoped optional colours, logo and title. Not a theme
-  framework and not a replacement layout.
 
 ## Considered, uncommitted
 

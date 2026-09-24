@@ -1,6 +1,6 @@
 # Architecture proposal
 
-Status: architecture direction accepted by the user, including the independent `admin.button` API with `changelist_buttons`, `changeform_buttons` and `row_buttons`, and the simpler Fabriq-style JSON widget direction. Both are now implemented; the JSON simplification below describes shipped behavior. The range filters of wave 3 and the choice filters after them are implemented too, and the Filters section below describes what ships rather than a proposal. The minimal command runner of wave 5 is implemented as well; the Management commands section describes what ships. Local decomposition remains revisable; backend/REPL questions below remain open. This is not a description of shipped features or authorization to implement the entire roadmap. Approval reference: Discord message 1551266173528703077.
+Status: architecture direction accepted by the user, including the independent `admin.button` API with `changelist_buttons`, `changeform_buttons` and `row_buttons`, and the simpler Fabriq-style JSON widget direction. Both are now implemented; the JSON simplification below describes shipped behavior. The range filters of wave 3 and the choice filters after them are implemented too, and the Filters section below describes what ships rather than a proposal. The minimal command runner of wave 5 is implemented as well; the Management commands section describes what ships. Restrained branding (wave 6) is implemented too, and the Branding section describes what ships. Local decomposition remains revisable; backend/REPL questions below remain open. This is not a description of shipped features or authorization to implement the entire roadmap. Approval reference: Discord message 1551266173528703077.
 
 Scope: django-extensions-admin, the reusable library. The user's upcoming application is its first consumer, not the subject of this architecture. Its repository and requirements are not yet supplied.
 
@@ -59,12 +59,14 @@ src/django_extensions_admin/
 │   ├── checks.py               system checks, registered only when adopted
 │   ├── views.py                urls(site), launch and signed result views
 │   └── tasks.py                the Task: revalidate, call_command, bounded output
-├── branding.py               + small validated palette/branding configuration
+├── branding.py                 validated logo and palette settings, system checks
+├── templatetags/
+│   └── admin_ext_branding.py   one tag: what the branding template renders
 ├── templates/django_extensions_admin/
 │   ├── buttons/
 │   ├── filters/                range and choice bodies inside the stock <details> shell
 │   ├── commands/               index, launch and result pages
-│   └── branding/            + narrow additive blocks
+│   └── branding/               base_site.html: two additive blocks, adopted by extending it
 └── static/django_extensions_admin/
     ├── buttons.css
     ├── json-widget.css
@@ -72,7 +74,7 @@ src/django_extensions_admin/
     ├── filters.css            sidebar fit for the filter forms; each works without it
     ├── choice-filters.js      search over already-rendered options; optional
     ├── commands.css           the output box; the pages work without it
-    └── branding.css         + optional scoped/theme-variable overrides
+    └── branding.css            the logo box only; the palette is inline admin variables
 
 demo/                          ordinary Django consumer with generated data
 tests/                         behavior tests, grouped as features grow
@@ -150,9 +152,19 @@ As shipped (wave 5). The shape is `commands.register(name, permission=..., form=
 - **Transactions.** The launch view opts out of `ATOMIC_REQUESTS` on every database alias and refuses inside an open transaction. That is the honest consequence of dispatching on commit without persistence.
 - **Imports.** Nothing outside `commands/` imports it, and the wheel depends on Django alone. Backend installation is one documented line per Django version, because django-tasks-db's `[compat]` extra pins Django below 6.0.
 
-### Branding and REPL
+### Branding
 
 Branding changes documented CSS variables and narrow template blocks, preserving block.super, native assets, DOM hooks and light/dark/auto. Native AdminSite title/header settings remain authoritative. Component styles stay namespaced. Turning branding off must leave the functional features working; no global reset or broad input/button rules.
+
+As shipped (wave 6):
+- **Adoption.** A project's own `admin/base_site.html` extends `django_extensions_admin/branding/base_site.html`. That template extends `admin/base_site.html` again, which Django's recursive `extends` resolves past the project's file to the next one down (normally the stock one). Nothing is registered, replaced or patched when the app is installed, and `ADMIN_EXTENSIONS["BRANDING"]` alone changes no page. Every AdminSite shares the one branding and keeps its own text.
+- **Blocks.** Only `dark-mode-vars` (palette, after Django's variables, before `extrastyle`, and overridden by no stock template) and `branding` (logo before the stock `#site-name`), both with `block.super`. Project CSS goes in `extrastyle`, after the branding layer.
+- **Palette.** Django's own variable names, from an allowlist of brand surfaces (header, breadcrumbs, captions, links, buttons), hex values only, invalid entries dropped and reported (E201-E207, W201). Variables Django's `dark_mode.css` redefines are set for light only unless `DARK_COLORS` gives a dark value; the rest apply to both themes, as in Django. The selectors are Django's own shapes, so equal-specificity project rules loaded later win. A test guards the dark-sensitive list against the installed `dark_mode.css`. Nothing is derived.
+- **Logo.** A static path, never a remote or `data:` URL. It is 32 px high, bounded in width by `branding.css`, not a link and not a tab stop. `alt` defaults to `site_header`. A storage miss renders no logo rather than an error.
+- **CSP.** The `<style>` takes Django 6.0's `csp_nonce` when the CSP middleware provides one.
+- **Proof.** Unit tests show every page body (index, changelist, change form with inlines and JSON, validation errors, login, command pages) is byte-identical with and without branding apart from the one `<img>`. Browser journeys cover themes, the toggle, 375/390 px, keyboard order, project overrides and missing parts. Only the stock admin is claimed.
+
+### REPL
 
 REPL is a separate explicit opt-in with feature-local dependencies and a separately authorized route. Its exploratory task must resolve authentication, session/process lifecycle, expiry, resource limits and deployment transport, and evaluate Ghostty frontend feasibility. It is arbitrary Python execution with application privileges, not a sandbox. Do not force WebSockets/ASGI tooling onto the rest of the package before that decision.
 
@@ -176,7 +188,9 @@ Queue only one bounded outcome at a time; these are proposed tasks, not dispatch
 5. **Minimal command runner.** Done: explicit registry, argument form, permitted launch and initiator-only status/output on django-tasks-db.
    - **Coverage.** Behavior tests on Django 5.2 and 6.0. Real-worker journeys run against a separately started `db_worker` on both, with SQLite in the gate and PostgreSQL checked separately. Browser journeys cover no-JS, dark and narrow layouts and escaped output.
    - **Not built.** No persisted history dashboard, auto-retry policy or generic form builder.
-6. **Restrained branding.** Palette/logo/title with on/off checks for stock widgets, our editor, light/dark/auto and project overrides. No markup redesign.
+6. **Restrained branding.** Done: an optional logo and an allowlisted palette of Django's own colour variables, adopted by extending one template. Title text stays the AdminSite's.
+   - **Coverage.** Behavior tests on Django 5.2 and 6.0: not adopted means byte-identical pages, adopted leaves every page body unchanged, plus theme placement, validation, checks and the CSP nonce. Browser journeys cover stock widgets (actions, list_editable, inlines, Select2, date widgets, errors), our editor, buttons, filters and command pages, light/dark/auto, the toggle, narrow layouts, keyboard order, project overrides and missing parts.
+   - **Not built.** No fonts, layout options, presets, per-user or per-site themes, or free-form CSS.
 7. **REPL spike, then a separate implementation decision.** Validate Ghostty transport and process lifecycle before offering a production-facing shell. Advanced query search remains a later bounded design task.
 
 For evolutionary work, use behavior-driven red/green/refactor and retain the existing repository gate. Add tests for plausible failure modes, not quotas or every helper. Use a few browser journeys for selection, layout, fallback and form ownership; do not replay the full rule matrix at every layer.

@@ -7,11 +7,12 @@ import datetime
 from django import forms
 from django.conf import settings
 from django.contrib.admin.filters import FieldListFilter
-from django.contrib.admin.views.main import ERROR_FLAG, PAGE_VAR
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+from .query import carried_params
 
 __all__ = ["DateRangeFilter", "DateTimeRangeFilter", "NumericRangeFilter"]
 
@@ -20,10 +21,6 @@ __all__ = ["DateRangeFilter", "DateTimeRangeFilter", "NumericRangeFilter"]
 #: lookup parameters before it ever tries to filter with them.
 GTE_SUFFIX = "__range__gte"
 LTE_SUFFIX = "__range__lte"
-
-#: Query parameters the sidebar form does not carry over. A new range starts at page one,
-#: and the changelist's error flag belongs to the request that set it.
-DROPPED_PARAMS = frozenset({PAGE_VAR, ERROR_FLAG})
 
 
 class RangeForm(forms.Form):
@@ -130,19 +127,8 @@ class RangeFilter(FieldListFilter):
         }
 
     def carried_params(self):
-        """Every other query parameter, as hidden inputs.
-
-        Submitting the range from the sidebar is an ordinary GET, so anything the
-        changelist is already doing - the search term, the ordering, the other filters -
-        has to travel with it or it would be dropped.
-        """
-        mine = set(self.expected_parameters())
-        return [
-            (name, value)
-            for name, values in self.request.GET.lists()
-            for value in values
-            if name not in mine and name not in DROPPED_PARAMS
-        ]
+        """Every other query parameter, as hidden inputs: see ``query.carried_params``."""
+        return carried_params(self.request, self.expected_parameters())
 
 
 class DateRangeFilter(RangeFilter):

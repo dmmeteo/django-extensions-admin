@@ -20,7 +20,7 @@ may still reorder the rest.
 - **First consumer pilot** - install the wheel in the user's application, integrate one
   button and one JSON field, and record the integration friction. This feedback may reorder
   everything below.
-- **Execution and styling design** - apply the accepted requirements and evaluate the native Django Tasks backend approach in [actions-and-task-execution.md](docs/decisions/actions-and-task-execution.md). Backend integrations remain unverified; customization must preserve stock-admin-dependent widgets and extensions.
+- **Execution and styling design** - apply the accepted requirements and evaluate the native Django Tasks backend approach in [actions-and-task-execution.md](docs/decisions/actions-and-task-execution.md). The backend spike selected django-tasks-db for the first command runner and deferred the Celery adapter; customization must preserve stock-admin-dependent widgets and extensions.
 
 - **Advanced query search** - a richer changelist search alongside the basic filters.
 

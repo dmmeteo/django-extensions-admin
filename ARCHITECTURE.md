@@ -175,7 +175,6 @@ Need: repeated admin friction without replacing Django. Smallest API: ordinary M
 ## Open before relevant implementation
 
 - First consumer repository, its Python/Django versions, custom AdminSite/templates and existing runner.
-- Confirm the proposed independent button namespace and changelist/changeform/row list names; advanced selected/filtered button scope is not required for the first slice.
 - Whether command runs must be visible to admins other than the initiator, or listed (needs minimal metadata persistence).
 - REPL deployment/transport and target environment.
 

@@ -1,0 +1,18 @@
+/* Command output: a readable box in the admin's own colours, light and dark.
+   Long lines wrap instead of widening the page. Without this file the output is plain,
+   still escaped, preformatted text. */
+
+.admin-ext-command-output {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 32rem;
+    overflow: auto;
+    margin: 0 0 1rem;
+    padding: 10px 12px;
+    border: 1px solid var(--hairline-color, #e8e8e8);
+    border-radius: 4px;
+    background: var(--darkened-bg, #f8f8f8);
+    color: var(--body-fg, #333);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+}

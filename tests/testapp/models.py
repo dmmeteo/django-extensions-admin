@@ -30,7 +30,10 @@ class Device(models.Model):
 
     class Meta:
         ordering = ("pk",)
-        permissions = [("purge_device", "Can purge device")]
+        permissions = [
+            ("purge_device", "Can purge device"),
+            ("run_device_commands", "Can run device commands"),
+        ]
 
     def __str__(self):
         return self.name

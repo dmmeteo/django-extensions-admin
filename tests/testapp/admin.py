@@ -1,5 +1,6 @@
 """Admins used by the test suite; each one exercises a documented pattern."""
 
+from django import forms
 from django.contrib import admin
 from django.db import models
 
@@ -11,6 +12,7 @@ from django_extensions_admin import (
     MultipleChoiceFilter,
     NumericRangeFilter,
     PrettyJSONWidget,
+    commands,
     readonly_json,
 )
 from django_extensions_admin import admin as extensions_admin
@@ -239,3 +241,26 @@ class ChoiceReadingAdmin(admin.ModelAdmin):
 choices_site = admin.AdminSite(name="choices")
 choices_site.register(Device, ChoiceDeviceAdmin)
 choices_site.register(Reading, ChoiceReadingAdmin)
+
+
+# --- the command runner ----------------------------------------------------------------
+# Registered here, in an admin module, because autodiscovery imports these in every
+# process - the web process and a task worker alike.
+
+
+class EchoForm(forms.Form):
+    message = forms.CharField(max_length=200)
+    times = forms.IntegerField(min_value=1, max_value=5, initial=1)
+    touch = forms.CharField(required=False)
+    device = forms.ModelChoiceField(Device.objects.all(), required=False)
+
+
+class FloodForm(forms.Form):
+    chars = forms.IntegerField(min_value=0, max_value=1_000_000, initial=100)
+
+
+RUN = "testapp.run_device_commands"
+commands.register("admin_ext_echo", form=EchoForm, permission=RUN, description="Echo")
+commands.register("admin_ext_fail", permission=RUN)
+commands.register("admin_ext_flood", form=FloodForm, permission=RUN, description="Flood")
+commands.register("admin_ext_prompt", permission="testapp.purge_device")

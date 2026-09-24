@@ -21,6 +21,15 @@ DEFAULTS: dict[str, Any] = {
     # Rewrite the field when it loses focus. Off by default: reformatting moves the
     # caret and interrupts native undo. The explicit "Format" control always works.
     "JSON_REFORMAT_ON_BLUR": False,
+    # The command runner (django_extensions_admin.commands) reads these only once a
+    # project adopts it. The Tasks backend alias - a key of settings.TASKS - that runs
+    # launched commands. No default on purpose: Django's own default alias is the
+    # ImmediateBackend, which would run "background" work inside the admin request.
+    "COMMANDS_TASK_BACKEND": None,
+    # Characters kept from each of a command's stdout and stderr.
+    "COMMANDS_OUTPUT_LIMIT": 20_000,
+    # Seconds after which a queued or running command is reported as possibly stuck.
+    "COMMANDS_STALE_AFTER": 30 * 60,
 }
 
 

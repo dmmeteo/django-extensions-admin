@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "django-extensions-admin"
 version = "0.1.0"
-description = "Independent, additive utilities for the Django admin: buttons and a JSON field widget. Not affiliated with django-extensions."
+description = "Independent, additive utilities for the Django admin: buttons, a JSON field widget and list filters. Not affiliated with django-extensions."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { file = "LICENSE" }
 authors = [{ name = "Django Stars" }]
-keywords = ["django", "admin", "buttons", "json", "widget"]
+keywords = ["django", "admin", "buttons", "json", "widget", "filters", "list_filter"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Web Environment",

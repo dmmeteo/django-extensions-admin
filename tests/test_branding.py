@@ -116,25 +116,26 @@ class AdoptedTests(BrandingCase):
         self.assertIn(">Restricted desk</a></div>", html)
         self.assertIn('class="admin-ext-brand-logo"', html)
 
-    def test_the_logo_is_a_bounded_static_image_named_after_the_site(self):
+    def test_the_logo_is_a_bounded_decorative_static_image(self):
         with branding():
             html = self.page("/admin/")
         self.assertIn(
             '<img class="admin-ext-brand-logo" src="/static/testapp/brand-logo.svg"'
-            ' alt="Django administration" height="32">',
+            ' alt="" height="32">',
             html,
         )
+        # The site name beside it stays the header's one accessible name.
+        self.assertEqual(html.count("Django administration</a>"), 1)
         self.assertIn('href="/static/django_extensions_admin/branding.css"', html)
         # Not a link and not a tab stop: the header text stays the one link home.
         self.assertNotRegex(html, r"<a[^>]*>\s*<img class=\"admin-ext-brand-logo\"")
         # Before the stock markup, which is kept whole.
         self.assertLess(html.index("admin-ext-brand-logo"), html.index('id="site-name"'))
 
-    def test_logo_alt_can_be_given_or_emptied(self):
-        for alt in ("Acme", ""):
-            with self.subTest(alt=alt), branding({**BRANDING, "LOGO_ALT": alt}):
-                html = self.page("/admin/")
-                self.assertIn(f'alt="{alt}" height="32"', html)
+    def test_an_explicit_logo_alt_is_used_and_escaped(self):
+        with branding({**BRANDING, "LOGO_ALT": 'Acme "blue" <logo>'}):
+            html = self.page("/admin/")
+        self.assertIn('alt="Acme &quot;blue&quot; &lt;logo&gt;" height="32"', html)
 
     def test_the_login_page_is_branded_and_keeps_its_theme_toggle(self):
         with branding():

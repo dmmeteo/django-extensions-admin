@@ -7,6 +7,6 @@ from ..branding import resolve
 register = template.Library()
 
 
-@register.simple_tag(takes_context=True)
-def admin_ext_branding(context):
-    return resolve(context)
+@register.simple_tag
+def admin_ext_branding():
+    return resolve()

@@ -96,7 +96,7 @@ class BrandingBrowserTests(BrowserTestCase):
     def assert_branded(self, page):
         self.assertEqual(page.inner_text("#site-name").strip(), HEADER)
         logo = page.locator("#branding img.admin-ext-brand-logo")
-        self.assertEqual(logo.get_attribute("alt"), HEADER)
+        self.assertEqual(logo.get_attribute("alt"), "")
         box = logo.bounding_box()
         self.assertIsNotNone(box, "the logo is not visible")
         self.assertLessEqual(box["height"], 32.5)
@@ -323,6 +323,11 @@ class BrandingBrowserTests(BrowserTestCase):
         self.assertEqual(page.inner_text("#site-name").strip(), HEADER)
         self.assertTrue(page.locator("#site-name a").is_visible())
         self.assertTrue(page.evaluate(NO_OVERFLOW))
+        # A decorative image that fails shows nothing: no alt text, no broken-image box.
+        width = page.evaluate(
+            "() => document.querySelector('.admin-ext-brand-logo').getBoundingClientRect().width"
+        )
+        self.assertEqual(width, 0)
         self.shot(page, "branding-missing-logo")
 
     def test_a_missing_branding_stylesheet_still_bounds_the_logo(self):

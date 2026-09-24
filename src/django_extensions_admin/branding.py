@@ -72,7 +72,7 @@ def _logo_path(config: dict) -> str | None:
     return logo
 
 
-def resolve(context) -> dict[str, Any]:
+def resolve() -> dict[str, Any]:
     """What the branding template renders, from validated settings only.
 
     Anything invalid is left out rather than rendered; the system check reports it. A
@@ -93,9 +93,11 @@ def resolve(context) -> dict[str, Any]:
         except ValueError:
             logo_url = None
 
+    # Decorative by default: the stock site name, the header's accessible name and its
+    # link home, sits right beside the logo. LOGO_ALT is for a logo that says more.
     alt = config.get("LOGO_ALT")
     if not isinstance(alt, str):
-        alt = context.get("site_header") or ""
+        alt = ""
 
     colors = _colors(config.get("COLORS"))
     return {

@@ -699,9 +699,10 @@ Two blocks of Django's own templates are extended, and both keep `{{ block.super
 - `dark-mode-vars` gains one `<style>` that sets Django's documented admin colour variables.
   It sits after Django's variables and before `extrastyle`.
 - `branding` gains an `<img>` before the stock `#site-name`. It is 32 px high, at most 40% of
-  the viewport wide, not a link and not a tab stop. Its `alt` is `site_header` unless
-  `LOGO_ALT` says otherwise. Use `"LOGO_ALT": ""` if you consider the logo decorative next
-  to the header text.
+  the viewport wide, not a link and not a tab stop. It is decorative (`alt=""`): the
+  stock site name right beside it is the header's accessible name, so screen readers do not
+  hear it twice and a logo that fails to load shows nothing. Set `LOGO_ALT` only when the
+  logo carries information the header text does not.
 
 Every package feature already reads these variables, so buttons, filters, the JSON editor
 and the command pages follow the palette. Nothing else is restyled.

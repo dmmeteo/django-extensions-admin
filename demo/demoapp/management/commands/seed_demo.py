@@ -12,10 +12,16 @@ from django.contrib.auth.models import Permission, User
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from demoapp.models import Device, Reading
+from demoapp.models import Device, Reading, Tag
 
 REGIONS = ["eu-west", "eu-north", "us-east", "ap-south"]
 STATUSES = ["idle", "running", "degraded"]
+#: More tags than the choice filter shows without a search box, two with punctuation
+#: that a comma-joined query string would get wrong.
+TAGS = [
+    "battery", "core", "edge", "events", "indoor", "lab", "logs", "metrics",
+    "outdoor", "production", "r&d", "rack 4, bay 2", "solar", "staging", "traces",
+]  # fmt: skip
 
 #: How far back the generated readings and device sightings go. Dates are relative to
 #: today so the range filters always have something in reach, wherever the demo is run.
@@ -32,6 +38,9 @@ class Command(BaseCommand):
         rng = random.Random(20260915)  # fixed seed: demo fixtures, not security
         Reading.objects.all().delete()
         Device.objects.all().delete()
+        Tag.objects.all().delete()
+        tags = [Tag.objects.create(name=name) for name in TAGS]
+        tag_rng = random.Random(20260924)  # fixed seed: demo fixtures, not security
 
         demo = self._account("demo", "demo", superuser=True)
         operator = self._account("operator", "operator", superuser=False)
@@ -39,7 +48,7 @@ class Command(BaseCommand):
 
         today = timezone.localdate()
         for index in range(1, 13):
-            Device.objects.create(
+            device = Device.objects.create(
                 name=f"device-{index:02d}",
                 region=rng.choice(REGIONS),
                 status=rng.choice(STATUSES),
@@ -61,6 +70,12 @@ class Command(BaseCommand):
                     "checks": [{"name": "disk", "value": rng.randint(1, 99)}],
                 },
             )
+            # Every fourth device has no tags, so the tag filter has an empty choice. A
+            # separate generator, so adding tags left every other generated value as it was.
+            device.tags.set(tag_rng.sample(tags, 0 if index % 4 == 0 else tag_rng.randint(1, 3)))
+
+        # A status with a comma and an ampersand: one value, however the URL encodes it.
+        Device.objects.filter(name="device-03").update(status="on hold, r&d")
 
         first = Device.objects.order_by("pk").first()
         self._edge_cases(first, rng)

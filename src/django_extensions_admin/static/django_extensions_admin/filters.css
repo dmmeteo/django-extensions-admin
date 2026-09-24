@@ -86,6 +86,13 @@
     padding: 0 15px 8px;
 }
 
+/* The sidebar is a .module, whose paragraphs are indented; keep the button, the note and
+   the "no match" hint on the same edge as the select, the checkboxes and stock links. */
+#changelist-filter .admin-ext-choice p {
+    padding-left: 0;
+    padding-right: 0;
+}
+
 #changelist-filter .admin-ext-choice-options {
     max-height: 16rem;
     overflow-y: auto;

@@ -1,6 +1,6 @@
 # Native actions and task execution
 
-Status: action-native interaction is an accepted user requirement. Django Tasks is the chosen direction for operational tools. The backend spike (2026-09-24) exercised real workers and selects django-tasks-db for the first command runner; the runner itself is not implemented.
+Status: action-native interaction is an accepted user requirement. Django Tasks is the chosen direction for operational tools. The backend spike (2026-09-24) exercised real workers and selected django-tasks-db for the first command runner. The runner now ships (`django_extensions_admin.commands`, README "Management commands") within the boundary below. Runs are visible to their initiator only, and there is no run model.
 
 Read PHILOSOPHY.md before turning this note into an implementation packet.
 
@@ -99,9 +99,9 @@ Need: launch allow-listed management commands without blocking admin requests. T
 
 **First runner boundary:**
 1. Depend only on the Tasks contract: `task`, `.using(backend=alias)`, `enqueue`, `get_result` and the three exceptions. Import it through one private switch between `django.tasks` and `django_tasks`, not through a queue interface.
-2. Take one explicit backend alias setting, with no silent use of `"default"`. A system check fails when the alias is missing or `supports_get_result` is false, so ImmediateBackend and DummyBackend can never become "background" execution.
+2. Take one explicit backend alias setting, with no silent use of `"default"`. A system check fails when the alias is missing or `supports_get_result` is false, so ImmediateBackend and DummyBackend can never become "background" execution. *Shipped:* `ADMIN_EXTENSIONS["COMMANDS_TASK_BACKEND"]`, check `E101`, plus explicit Immediate/Dummy refusal.
 3. Document and test **django-tasks-db** as the supported backend: native on 6.0, and on 5.2 through `django-tasks-db[compat]`. Other backends are "may work, unverified". Celery is excluded for now (above).
-4. Always enqueue through `transaction.on_commit`. This is required on Celery-like backends and harmless on the DB backend.
+4. Always enqueue through `transaction.on_commit`. This is required on Celery-like backends and harmless on the DB backend. *Shipped resolution:* the launch view is `non_atomic_requests` for every Django database alias, and it refuses to launch while any connection is still inside `atomic()`. Without a history model, a run deferred to a later commit could never return its reference.
 5. Payload: registered command key plus JSON-safe validated options; nothing else. The task body rechecks the registry, converts its bounded output to JSON itself, and never relies on the backend to reject non-JSON.
 6. Protected results, a firm choice for v1: no new model. The launch view returns a **signed reference** (`django.core.signing` with a runner-specific salt) binding result ID, backend alias and initiating user ID. The status view requires a valid signature, a matching `request.user`, and the command's permission, before calling `get_result`. Also pass `actor_id` in task kwargs so the stored record corroborates the reference. This supports "the initiator sees their run". Listing past runs or letting *other* admins view a run needs minimal metadata persistence. That is a product decision to take explicitly, not something to slip in.
 7. Show "result no longer available" for `TaskResultDoesNotExist` (pruned or unknown). Show "still running after N minutes; the worker may have stopped" past a configured timeout instead of polling forever. No automatic retry.

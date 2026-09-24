@@ -1,6 +1,6 @@
 # Architecture proposal
 
-Status: architecture direction accepted by the user, including the independent `admin.button` API with `changelist_buttons`, `changeform_buttons` and `row_buttons`, and the simpler Fabriq-style JSON widget direction. Both are now implemented; the JSON simplification below describes shipped behavior. The range filters of wave 3 and the choice filters after them are implemented too, and the Filters section below describes what ships rather than a proposal. Local decomposition remains revisable; backend/REPL questions below remain open. This is not a description of shipped features or authorization to implement the entire roadmap. Approval reference: Discord message 1551266173528703077.
+Status: architecture direction accepted by the user, including the independent `admin.button` API with `changelist_buttons`, `changeform_buttons` and `row_buttons`, and the simpler Fabriq-style JSON widget direction. Both are now implemented; the JSON simplification below describes shipped behavior. The range filters of wave 3 and the choice filters after them are implemented too, and the Filters section below describes what ships rather than a proposal. The minimal command runner of wave 5 is implemented as well; the Management commands section describes what ships. Local decomposition remains revisable; backend/REPL questions below remain open. This is not a description of shipped features or authorization to implement the entire roadmap. Approval reference: Discord message 1551266173528703077.
 
 Scope: django-extensions-admin, the reusable library. The user's upcoming application is its first consumer, not the subject of this architecture. Its repository and requirements are not yet supplied.
 
@@ -53,17 +53,17 @@ src/django_extensions_admin/
 │   ├── query.py                what a sidebar filter form carries from the changelist
 │   ├── ranges.py               date/numeric filtering: three list_filter classes
 │   └── choices.py              one-value dropdown and same-field multiple choice
-├── commands/                 + allowlisted management-command UI
-│   ├── registry.py           + explicit command definitions, forms, permissions
-│   ├── forms.py              + shared Django form behavior if actually needed
-│   ├── admin.py              + opt-in AdminSite URL/context integration
-│   ├── views.py              + validation, enqueue and protected result views
-│   └── tasks.py              + Django Task invoking a registered command
+├── commands/                   allowlisted management-command runner (opt-in)
+│   ├── registry.py             explicit registrations, JSON payload round trip
+│   ├── backend.py              the one Tasks import switch; backend requirements
+│   ├── checks.py               system checks, registered only when adopted
+│   ├── views.py                urls(site), launch and signed result views
+│   └── tasks.py                the Task: revalidate, call_command, bounded output
 ├── branding.py               + small validated palette/branding configuration
 ├── templates/django_extensions_admin/
 │   ├── buttons/
 │   ├── filters/                range and choice bodies inside the stock <details> shell
-│   ├── commands/            +
+│   ├── commands/               index, launch and result pages
 │   └── branding/            + narrow additive blocks
 └── static/django_extensions_admin/
     ├── buttons.css
@@ -71,6 +71,7 @@ src/django_extensions_admin/
     ├── json-widget.js
     ├── filters.css            sidebar fit for the filter forms; each works without it
     ├── choice-filters.js      search over already-rendered options; optional
+    ├── commands.css           the output box; the pages work without it
     └── branding.css         + optional scoped/theme-variable overrides
 
 demo/                          ordinary Django consumer with generated data
@@ -139,6 +140,13 @@ Keep command URLs opt-in through a narrow AdminSite integration; JSON/buttons/fi
 
 Result authorization: bind each run to the initiating actor and the correct task/backend. A task ID alone is not authority. The spike found no actor metadata in either backend, so the first runner uses a small signed reference (result ID, alias, initiating user) checked together with the command permission. Showing runs to other admins or listing them would need minimal metadata persistence, which is a product decision. Do not smuggle in a full run-history model. Logs/results need bounded size, output sanitization and capability-aware availability. Dispatch follows transaction commit when needed; retries are explicit for non-idempotent commands.
 
+As shipped (wave 5). The shape is `commands.register(name, permission=..., form=...)` in an `admin.py`, which is autodiscovered in the worker too, plus `commands.urls(site)` included ahead of `site.urls`. There is no AdminSite subclass, and nothing is routed unless it is included.
+- **Payload.** It is the form's submitted values as JSON. They are validated a second time before enqueue, and again in the worker, so a model choice travels as a key.
+- **Worker checks.** The worker also rechecks the registration and the launching user's permission.
+- **Failures.** A failure is a truthful backend `FAILED`. Its JSON summary, which is the exception line and bounded output, is shown instead of the traceback.
+- **Transactions.** The launch view opts out of `ATOMIC_REQUESTS` on every database alias and refuses inside an open transaction. That is the honest consequence of dispatching on commit without persistence.
+- **Imports.** Nothing outside `commands/` imports it, and the wheel depends on Django alone. Backend installation is one documented line per Django version, because django-tasks-db's `[compat]` extra pins Django below 6.0.
+
 ### Branding and REPL
 
 Branding changes documented CSS variables and narrow template blocks, preserving block.super, native assets, DOM hooks and light/dark/auto. Native AdminSite title/header settings remain authoritative. Component styles stay namespaced. Turning branding off must leave the functional features working; no global reset or broad input/button rules.
@@ -162,7 +170,9 @@ Queue only one bounded outcome at a time; these are proposed tasks, not dispatch
 2. **First consumer pilot.** Once the user supplies the application, install a local wheel and integrate one useful button and JSON field. Record integration friction; do not pull application business logic into the library. This feedback may reorder subsequent work.
 3. **Range filters.** Done, ahead of the consumer pilot: `DateRangeFilter`, `DateTimeRangeFilter` and `NumericRangeFilter` through list_filter, composed with search, ordering, the other filters and the admin's own queryset. Valid, partial, reversed and unreadable input and the active-timezone day boundaries are covered by behavior tests on Django 5.2 and 6.0, plus browser journeys for layout, narrow/dark and the missing-stylesheet fallback. Choice filters followed as the next small slice and are done too: `ChoiceFilter` and `MultipleChoiceFilter`, with same-field OR as repeated Django parameters, M2M de-duplication, tampered-value handling, facets and optional option search. They are covered by behavior tests on Django 5.2 and 6.0 and by browser journeys for the dropdown, OR, composition, Clear, no-JS, search and narrow/dark layout.
 4. **Task-backend spike.** Done: a harmless allowed command, failure, JSON payloads, transaction timing, shutdown and result access ran on real django-tasks-db workers (Django 5.2/6.0/6.1) and a real Celery worker. The decision note records tested versions, observed behaviour and the first-runner boundary. No backend abstraction was added.
-5. **Minimal command runner.** Explicit registry, argument form, permitted launch and basic authorized status/output using the validated backend. Done when allowed and denied runs and worker failure are exercised. No persisted history dashboard, auto-retry policy or generic form builder.
+5. **Minimal command runner.** Done: explicit registry, argument form, permitted launch and initiator-only status/output on django-tasks-db.
+   - **Coverage.** Behavior tests on Django 5.2 and 6.0. Real-worker journeys run against a separately started `db_worker` on both, with SQLite in the gate and PostgreSQL checked separately. Browser journeys cover no-JS, dark and narrow layouts and escaped output.
+   - **Not built.** No persisted history dashboard, auto-retry policy or generic form builder.
 6. **Restrained branding.** Palette/logo/title with on/off checks for stock widgets, our editor, light/dark/auto and project overrides. No markup redesign.
 7. **REPL spike, then a separate implementation decision.** Validate Ghostty transport and process lifecycle before offering a production-facing shell. Advanced query search remains a later bounded design task.
 
@@ -175,7 +185,7 @@ Need: repeated admin friction without replacing Django. Smallest API: ordinary M
 ## Open before relevant implementation
 
 - First consumer repository, its Python/Django versions, custom AdminSite/templates and existing runner.
-- Whether command runs must be visible to admins other than the initiator, or listed (needs minimal metadata persistence).
+- Resolved for v1: command runs are visible to their initiator only, with no list. Showing them to other admins would still need minimal metadata persistence and a new product decision.
 - REPL deployment/transport and target environment.
 
-The consumer questions gate the pilot, which is still pending. The run-visibility question gates the minimal command runner (wave 5), whose backend boundary the decision note already sets; the runner is not built. Do not invent the new application's architecture from this library plan.
+The consumer questions gate the pilot, which is still pending. Do not invent the new application's architecture from this library plan.

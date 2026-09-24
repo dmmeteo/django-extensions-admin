@@ -1,8 +1,10 @@
 # django-extensions-admin
 
 Small, additive utilities for the Django admin you already have: **buttons**, a
-**JSON field editor**, **range filters** and **choice filters**. No redesign, no base class you must inherit
-everywhere, no build step, no runtime dependency beyond Django.
+**JSON field editor**, **range filters**, **choice filters** and an opt-in
+**management-command runner**. No redesign, no base class you must inherit everywhere, no
+build step, no runtime dependency beyond Django. The command runner alone needs a Django
+Tasks backend, which you install only if you use it.
 
 > **Independent project.** Inspired by the spirit of `django-extensions`, but not
 > official, not affiliated with it, and it does not depend on it. The name is
@@ -441,12 +443,201 @@ migration and no stored state. Bookmarked URLs keep working, because the paramet
 Django's and Django also ORs a repeated key. The one exception is "empty" together with a
 value, which Django's own filter reads as both at once and therefore matches nothing.
 
+## Management commands
+
+Launch an explicit allow-list of management commands from the admin. A Django Tasks worker
+runs them, so the admin request never waits, and the user who launched a run sees its status
+and output. Adoption is explicit: installing the app adds no route, and none of the other
+features imports a Tasks package.
+
+```python
+# admin.py - admin modules are imported in every process, the worker included
+from django import forms
+from django_extensions_admin import commands
+
+class RebuildIndexForm(forms.Form):
+    batch_size = forms.IntegerField(min_value=1, initial=500)   # --batch-size
+    dry_run = forms.BooleanField(required=False)                # --dry-run
+
+commands.register("clearsessions", permission="sessions.delete_session")
+commands.register(
+    "rebuild_index",
+    form=RebuildIndexForm,
+    permission="search.rebuild_index",
+    description="Rebuild the search index",
+)
+```
+
+```python
+# urls.py - before admin.site.urls, which ends with a catch-all
+urlpatterns = [
+    path("admin/commands/", commands.urls(admin.site)),
+    path("admin/", admin.site.urls),
+]
+```
+
+### Setup
+
+Install the backend. Use the line for your Django version:
+
+```bash
+uv pip install django-tasks-db               # Django 6.0: django.tasks is built in
+uv pip install "django-tasks-db[compat]"     # Django 5.2: adds the django-tasks backport
+```
+
+`[compat]` pins Django below 6.0, so do not use it on 6.0. django-extensions-admin has no
+extra for this: a single extra cannot be right for both Django versions. Both packages are
+BSD-3-Clause.
+
+```python
+INSTALLED_APPS += ["django_tasks_db"]          # plus "django_tasks" on Django 5.2
+TASKS = {"commands": {"BACKEND": "django_tasks_db.DatabaseBackend"}}
+ADMIN_EXTENSIONS = {"COMMANDS_TASK_BACKEND": "commands"}
+```
+
+Run `manage.py migrate` to create the queue table, which lives in your own database. Then run
+a worker for that alias under your process supervisor:
+
+```bash
+python manage.py db_worker --backend commands --no-reload
+python manage.py prune_db_task_results --backend commands --queue-name '*' --min-age-days 14
+```
+
+- **`--no-reload`:** reloading defaults to `DEBUG`.
+- **Stop grace period:** give the worker one at least as long as your longest command. One
+  SIGTERM lets the running command finish; a second one interrupts it.
+- **Pruning:** schedule the second command. Results are kept until you prune them.
+- **Lost runs:** nothing recovers a run whose worker was killed. The page then warns that the
+  run may be stuck (below), and it is not retried.
+
+The package adds no menu entry. Link to `/admin/commands/` from wherever suits your admin.
+
+### Registering a command
+
+`register(name, *, permission, form=None, description=None)`
+
+- **`name`** is the management command. Nothing unregistered can be launched, whatever the
+  browser sends.
+- **`permission`** is required, as `"app_label.codename"` and checked with
+  `user.has_perm`. Use an existing model permission or a custom `Meta.permissions` entry.
+- **`form`** is an ordinary `forms.Form`. Its field names are the command's option names
+  (`dest`), and its `cleaned_data` becomes the `call_command()` keyword arguments. Leave it
+  out for a command without options; the page then asks for an explicit Run.
+- **`description`** is the label. It defaults to the command name.
+
+The system checks catch these mistakes:
+- an unknown command;
+- a field that is not one of the command's options;
+- a missing, unknown or inline backend.
+
+`register()` itself refuses these, as `ImproperlyConfigured`:
+- a duplicate;
+- a permission not written as `"app_label.codename"`;
+- file fields;
+- fields named `stdout`, `stderr` or `interactive`.
+
+### Pages and statuses
+
+`/admin/commands/` lists the registered commands the user may run. It is not a list of runs.
+Each command has a stock admin form. **Run** posts it, queues the run and redirects to that
+run's result page:
+
+| Status | Shown when |
+| --- | --- |
+| Queued | Waiting for a worker. The page reloads itself every 3 s with a `<meta>` refresh; no JavaScript. |
+| Running | A worker has claimed it. |
+| Succeeded | Captured `stdout` and `stderr`, escaped. |
+| Failed | The exception type and message, plus the output written before it. Never the traceback. |
+| Unavailable | The result was pruned, is unknown, or belongs to a backend alias that is no longer configured. |
+
+A run still queued or running after `COMMANDS_STALE_AFTER` stops reloading and shows a
+warning. A running run's warning says the worker may have stopped. A queued run's warning asks
+whether a worker is serving the alias. Runs are never retried automatically.
+
+### What is enforced
+
+- **Launch is POST-only and CSRF-protected.** A GET shows the form and queues nothing.
+- **Every view runs through `admin_site.admin_view`.** An active staff login is required, and
+  each view checks the command's permission itself. Hiding a link is not a security boundary.
+- **The payload is the form's submitted values, as JSON, plus the command key and user id.**
+  Before queueing, the values are validated a second time; any that would come back
+  different are refused.
+- **The worker trusts none of the payload.** It looks the key up in its own registry,
+  requires the launching user to be active and still permitted, and validates the options
+  against the registered form. Only then does it call `call_command()`. It passes
+  `interactive=False` when the command has that option.
+- **Result pages are for the initiator only.** A result is reached through a signed reference
+  binding the result id, backend alias, command and initiating user. Anyone else gets a 404,
+  superusers included. The permission is checked again on every view. A raw task id grants
+  nothing.
+- **django-tasks-db's own admin is separate.** It registers a "Task Results" admin for its
+  model. Superusers, and staff holding its `django_tasks_db` view permission, see every task
+  there, with its arguments and output. Grant that permission deliberately, or
+  `admin.site.unregister(DBTaskResult)` if the initiator-only pages should be the only view.
+- **Output is bounded and escaped.** `COMMANDS_OUTPUT_LIMIT` characters are kept per stream,
+  cut in the worker and again on the page. HTML-looking output is shown as text.
+- **Misconfiguration is refused, never worked around.** An unset or unknown alias, the
+  `ImmediateBackend` or `DummyBackend`, or a backend that cannot read results back produces
+  a system check error. The pages show the same error and offer no Run button. A POST
+  returns 503. Nothing ever runs inline.
+- **Queue failures are shown, not hidden.** If the backend refuses an enqueue, the page says
+  so with a 503. It shows no "queued" message.
+
+### Transactions and `ATOMIC_REQUESTS`
+
+A run is queued with `transaction.on_commit`, so a rolled-back transaction never publishes
+work. There is also no run-history model, so the launch view can only show a result once the
+task exists. Two things follow:
+
+- **The launch view opts out of `ATOMIC_REQUESTS`.** It uses
+  `transaction.non_atomic_requests` for every **database** alias in `DATABASES`, which is a
+  separate thing from the Tasks alias. It writes no application data of its own. With
+  `ATOMIC_REQUESTS = True` launching therefore works as usual, and the task row is committed
+  before the worker looks for it.
+- **An open transaction makes the launch fail.** If a database connection is still inside
+  `atomic()` when the view runs, for example because your middleware wraps requests in a
+  transaction, the launch is refused with an error. It is not deferred, because a deferred
+  run could not return a reference.
+
+### Settings
+
+All under `ADMIN_EXTENSIONS`:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `COMMANDS_TASK_BACKEND` | `None` | The `settings.TASKS` alias that runs commands. Required; Django's `"default"` is never assumed. |
+| `COMMANDS_OUTPUT_LIMIT` | `20000` | Characters kept from each of stdout and stderr. |
+| `COMMANDS_STALE_AFTER` | `1800` | Seconds before a queued or running run is reported as possibly stuck. |
+
+### Backends
+
+**django-tasks-db** is the only tested backend:
+- Django 6.0: `django.tasks`, native.
+- Django 5.2: `django_tasks`, through `[compat]`.
+
+Other backends that can read results back get a system check warning (`W101`), not a promise.
+Celery (django-tasks-celery 0.1.1) is not supported: lost and unknown results look like
+pending ones, and rolled-back transactions still dispatch. The evidence is in
+[the decision note](docs/decisions/actions-and-task-execution.md).
+
+### Removing the command runner
+
+1. Remove the `commands.urls(...)` line, the `commands.register(...)` calls and
+   `COMMANDS_TASK_BACKEND`. The commands remain ordinary management commands.
+2. Let queued runs finish, then prune or drop the results. They live in django-tasks-db's
+   table, not ours.
+3. Remove `django_tasks_db`/`django_tasks` from `INSTALLED_APPS` and uninstall them if
+   nothing else uses them.
+
+The package itself has no model and no migration.
+
 ## Demo
 
 ```bash
 bash scripts/demo.sh
 # http://127.0.0.1:8765/admin/
-# demo/demo (superuser)   operator/operator (staff, cannot purge)
+# http://127.0.0.1:8765/admin/commands/   (a db_worker runs beside the server)
+# demo/demo (superuser)   operator/operator (staff, cannot purge or run commands)
 ```
 
 Loopback only, a disposable SQLite file, and entirely generated data. The demo shows every
@@ -458,7 +649,9 @@ and devices carry dates, instants and numbers for the range filters, with sighti
 after and just before local midnight so the timezone boundary is visible. Devices also
 have a region dropdown and status and tag checkbox lists. There are fifteen tags,
 including `r&d` and `rack 4, bay 2`, enough to bring up the search box. On Readings you pick
-the device from a searchable dropdown.
+the device from a searchable dropdown. The command runner offers one read-only
+`demo_report` command with a region choice, a checkbox and a free-text note that is printed
+verbatim. The note is where HTML-looking output shows up as plain text.
 
 `DEMO_PORT=9000 bash scripts/demo.sh` changes the port.
 
@@ -468,13 +661,23 @@ the device from a searchable dropdown.
 bash scripts/verify.sh
 ```
 
-Lint (Ruff + `node --check`), naming check, wheel build with an asset manifest check, a
-clean-install import smoke from the wheel, the test suite on both supported Django
-versions, and the headless-browser smoke with screenshots into `artifacts/`.
+The gate runs, in order:
+- lint (Ruff + `node --check`) and a naming check;
+- a wheel build, checked against an asset manifest and for Django being its only dependency;
+- a clean-install import smoke from the wheel, **with no Tasks package installed**;
+- the test suite on both supported Django versions, each with its documented
+  django-tasks-db install;
+- the command runner end to end against a **separately started `db_worker` process** on both
+  versions;
+- the headless-browser smoke, with screenshots into `artifacts/`.
+
+The worker journeys also run against PostgreSQL: set `WORKER_PG=host:port` (user, password
+and database `deadmin`) and run
+`DJANGO_SETTINGS_MODULE=worker_tests.settings python tests/runtests.py worker_tests`.
 
 GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the part of
-that gate which is reliable on a hosted Linux runner: lint and the test suite on Django 5.2
-and 6.0. The wheel/install smoke and the browser smoke stay local.
+that gate which is reliable on a hosted Linux runner: lint, the test suite and the worker
+journeys on Django 5.2 and 6.0. The wheel/install smoke and the browser smoke stay local.
 
 ## Tested versions
 
@@ -484,6 +687,7 @@ Exactly what the gate runs, and nothing is claimed beyond it:
 | --- | --- |
 | Python | CPython 3.13 |
 | Django | 5.2 LTS and 6.0 |
+| Command-runner backend | django-tasks-db 0.13.0 (with django-tasks 0.12 on 5.2), SQLite; PostgreSQL 16 checked separately |
 | Browser | Chromium via Playwright 1.63 (headless) |
 | OS | Linux x86-64 |
 
@@ -495,7 +699,19 @@ and Safari are untested.
 
 - Buttons are buttons. There is no workflow engine, no action-form builder, no chaining and
   no persisted run history.
-- Long-running handlers block the request; hand work to your own task runner.
+- Long-running button handlers block the request; hand the work to your own task runner, or
+  register it as a command for the command runner.
+- The command runner:
+  - **Visibility.** It shows a run to its initiator only. There is no run list, history or
+    dashboard, and no way to show a run to another admin.
+  - **What it runs.** It passes options only: no positional arguments and no file uploads.
+    The form is built with `data=` alone, without the request.
+  - **What it captures.** Only `self.stdout` and `self.stderr` are captured, not `print()`
+    or logging. Output arrives when the run finishes; nothing is streamed.
+  - **What it does not do.** No cancellation, retries, scheduling or priorities. A run whose
+    worker was killed stays "running" until it is pruned.
+  - **Where it launches from.** Launching is refused from inside an open database
+    transaction (see above).
 - The JSON editor is a text editor, not a tree view, schema editor or diff tool.
 - Range filters are two bounds on one field. No saved presets, no relative shortcuts
   ("last 7 days" is Django's own `DateFieldListFilter`), no `__in` lists, no query builder.

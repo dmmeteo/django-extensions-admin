@@ -179,4 +179,4 @@ Need: repeated admin friction without replacing Django. Smallest API: ordinary M
 - Whether command runs must be visible to admins other than the initiator, or listed (needs minimal metadata persistence).
 - REPL deployment/transport and target environment.
 
-These do not block discussing or refining the independent button slice. Do not invent the new application's architecture from this library plan.
+The consumer questions gate the pilot, which is still pending. The run-visibility question gates the minimal command runner (wave 5), whose backend boundary the decision note already sets; the runner is not built. Do not invent the new application's architecture from this library plan.

@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import transaction
 
@@ -26,6 +28,8 @@ __all__ = [
 ]
 
 ERROR_LIMIT = 2_000
+
+logger = logging.getLogger("django_extensions_admin.commands")
 
 
 class CommandRunError(Exception):
@@ -82,7 +86,7 @@ def run_command(key, options, actor_id):
     registration = registry.get(key)
     if registration is None:
         raise CommandNotAllowed(f"{key!r} is not a registered admin command in this worker.")
-    user = get_user_model()._default_manager.filter(pk=actor_id).first()
+    user = _actor(actor_id)
     if user is None or not registration.has_permission(user):
         raise CommandNotAllowed("The user who launched this command may no longer run it.")
     form = registration.form(data=options if isinstance(options, dict) else {})
@@ -91,25 +95,60 @@ def run_command(key, options, actor_id):
 
     limit = get_setting("COMMANDS_OUTPUT_LIMIT")
     stdout, stderr = BoundedOutput(limit), BoundedOutput(limit)
-    arguments = dict(form.cleaned_data)
+    arguments = registry.command_arguments(form)
     command = registration.load_command()
     parser = command.create_parser("", key)
     if any(action.dest == "interactive" for action in parser._actions):
         arguments["interactive"] = False  # nobody is there to answer a prompt
     try:
         call_command(command, stdout=stdout, stderr=stderr, **arguments)
+    except SystemExit as exc:
+        if _is_worker_shutdown(exc):
+            raise  # the worker is being stopped, not the command failing
+        # sys.exit() / sys.exit(0) is a successful exit, as in a shell; any other code
+        # (makemigrations --check exits 1) fails the run.
+        failure = exc if exc.code not in (None, 0) else None
+        summary = f"SystemExit: exit code {exc.code}"
     except Exception as exc:
+        summary = f"{type(exc).__name__}: {exc}"
+        failure = exc
+    else:
+        failure = None
+    if failure is not None:
+        # The full exception goes to the worker's log only. What the backend stores is
+        # the bounded summary: "from None" keeps the original, with its unbounded
+        # message and frames, out of the recorded traceback.
+        logger.error("Admin command %r failed", key, exc_info=failure)
         raise CommandFailed(
-            f"{type(exc).__name__}: {exc}",
-            stdout.getvalue(),
-            stderr.getvalue(),
-            stdout.truncated or stderr.truncated,
-        ) from exc
+            summary, stdout.getvalue(), stderr.getvalue(), stdout.truncated or stderr.truncated
+        ) from None
     return {
         "stdout": stdout.getvalue(),
         "stderr": stderr.getvalue(),
         "truncated": stdout.truncated or stderr.truncated,
     }
+
+
+def _actor(actor_id):
+    try:
+        return get_user_model()._default_manager.filter(pk=actor_id).first()
+    except (TypeError, ValueError, ValidationError):  # not a key of this user model
+        return None
+
+
+def _is_worker_shutdown(exc: SystemExit) -> bool:
+    """True for the SystemExit that django-tasks-db's worker raises from its own signal
+    handler on a second SIGTERM/SIGINT. That one must end the process; any other
+    SystemExit came from the command (``sys.exit()``, ``--check`` options) and fails it.
+    """
+    try:
+        from django_tasks_db.management.commands.db_worker import Worker
+    except ImportError:
+        return False
+    innermost = exc.__traceback__
+    while innermost is not None and innermost.tb_next is not None:
+        innermost = innermost.tb_next
+    return innermost is not None and innermost.tb_frame.f_code is Worker.shutdown.__code__
 
 
 run_command = tasks_api().task(backend=get_setting("COMMANDS_TASK_BACKEND"))(run_command)

@@ -1,4 +1,5 @@
-"""The unit-test settings, on a database a separately started worker can share.
+"""The unit-test settings, on a database a separately started worker can share, with a
+UUID-keyed custom user model.
 
 SQLite file by default (one worker; django-tasks-db takes exclusive transactions), or a
 disposable PostgreSQL when WORKER_PG="host:port" is set. The test runner creates the
@@ -12,6 +13,10 @@ from tests.settings import *  # noqa: F403
 
 ROOT = Path(__file__).resolve().parent.parent
 ARTIFACTS = Path(os.environ.get("WORKER_ARTIFACTS") or ROOT / "artifacts" / "worker")
+
+# Every journey here runs as a user whose primary key is a UUID, not an integer.
+INSTALLED_APPS = [*INSTALLED_APPS, "worker_tests.accounts"]  # noqa: F405
+AUTH_USER_MODEL = "worker_accounts.User"
 
 if pg := os.environ.get("WORKER_PG"):
     host, port = pg.split(":")

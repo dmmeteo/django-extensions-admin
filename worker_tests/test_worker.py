@@ -4,15 +4,19 @@
         python tests/runtests.py worker_tests
 
 Three processes take part: this test process (the admin), the worker, and for pruning a
-third ``manage.py`` process. Nothing is mocked on the worker side.
+third ``manage.py`` process. Nothing is mocked on the worker side. The user model here
+has a UUID primary key, so the actor id and the signed reference are proven for a
+non-integer key end to end.
 """
 
 import os
 import re
 import time
+import uuid
 from unittest import mock
 
-from django.contrib.auth.models import Permission, User
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.db import connections
 from django.test import TransactionTestCase
 from django_tasks_db.models import DBTaskResult
@@ -28,7 +32,9 @@ STATE = re.compile(r'data-state="(\w+)"')
 
 class RealWorkerTests(TransactionTestCase):
     def setUp(self):
-        self.user = User.objects.create_user("run", "run@example.invalid", "pw", is_staff=True)
+        self.user = get_user_model().objects.create_user(
+            "run", "run@example.invalid", "pw", is_staff=True
+        )
         self.user.user_permissions.add(Permission.objects.get(codename="run_device_commands"))
         self.client.force_login(self.user)
 
@@ -66,6 +72,44 @@ class RealWorkerTests(TransactionTestCase):
         self.assertNotEqual(worker.pid, os.getpid())
         self.assertTrue(Device.objects.filter(name="w").exists())
         self.assertEqual(worker.returncode, 0)
+        # The UUID actor went through the queue as a string and was found by the worker.
+        self.assertIsInstance(self.user.pk, uuid.UUID)
+        self.assertEqual(
+            DBTaskResult.objects.get().args_kwargs["kwargs"]["actor_id"], str(self.user.pk)
+        )
+
+    def test_multi_value_and_blank_options_cross_the_process_boundary(self):
+        alpha, beta = Device.objects.create(name="alpha"), Device.objects.create(name="beta")
+        filled = self.launch(
+            "admin_ext_options",
+            {
+                "kinds": ["sensor", "relay"],
+                "devices": [str(alpha.pk), str(beta.pk)],
+                "when_0": "2026-09-24",
+                "when_1": "10:30:00",
+            },
+        )
+        with self.worker():
+            state, response = self.wait_until_finished(filled)
+        self.assertEqual(state, "succeeded")
+        stdout = response.context["stdout"]
+        for line in (
+            "limit=100",  # left blank: the command's own default
+            "label='untitled'",
+            "dry_run=False",
+            "kinds=['sensor', 'relay']",
+            "devices=['alpha', 'beta']",
+            "when='2026-09-24T10:30:00",
+        ):
+            self.assertIn(line, stdout)
+
+    def test_sys_exit_is_a_recorded_failure(self):
+        location = self.launch("admin_ext_exit")
+        with self.worker():
+            state, response = self.wait_until_finished(location)
+        self.assertEqual(state, "failed")
+        self.assertContains(response, "SystemExit: exit code 3")
+        self.assertContains(response, "about to exit with 3")
 
     def test_a_failing_command_is_reported_by_the_worker(self):
         location = self.launch("admin_ext_fail")
@@ -81,16 +125,16 @@ class RealWorkerTests(TransactionTestCase):
 
         task = run_command.using(backend="commands")
         forged = [
-            task.enqueue(key="flush", options={}, actor_id=self.user.pk),
+            task.enqueue(key="flush", options={}, actor_id=str(self.user.pk)),
             task.enqueue(
                 key="admin_ext_echo",
                 options={"message": "x", "times": "99", "touch": "forged"},
-                actor_id=self.user.pk,
+                actor_id=str(self.user.pk),
             ),
             task.enqueue(
                 key="admin_ext_prompt",  # needs a permission this user lacks
                 options={},
-                actor_id=self.user.pk,
+                actor_id=str(self.user.pk),
             ),
         ]
         with self.worker():

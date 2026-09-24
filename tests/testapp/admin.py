@@ -259,8 +259,31 @@ class FloodForm(forms.Form):
     chars = forms.IntegerField(min_value=0, max_value=1_000_000, initial=100)
 
 
+class FailForm(forms.Form):
+    padding = forms.IntegerField(required=False, min_value=0, max_value=10_000_000)
+
+
+class ExitForm(forms.Form):
+    code = forms.IntegerField(required=False)
+
+
+class OptionsForm(forms.Form):
+    """Every optional field: left blank, the command's own argparse default applies."""
+
+    limit = forms.IntegerField(required=False, min_value=0)
+    label = forms.CharField(required=False)
+    dry_run = forms.BooleanField(required=False)
+    kinds = forms.MultipleChoiceField(
+        required=False, choices=[("sensor", "Sensor"), ("gateway", "Gateway"), ("relay", "Relay")]
+    )
+    devices = forms.ModelMultipleChoiceField(Device.objects.all(), required=False)
+    when = forms.SplitDateTimeField(required=False)
+
+
 RUN = "testapp.run_device_commands"
 commands.register("admin_ext_echo", form=EchoForm, permission=RUN, description="Echo")
-commands.register("admin_ext_fail", permission=RUN)
+commands.register("admin_ext_fail", form=FailForm, permission=RUN)
+commands.register("admin_ext_exit", form=ExitForm, permission=RUN)
+commands.register("admin_ext_options", form=OptionsForm, permission=RUN)
 commands.register("admin_ext_flood", form=FloodForm, permission=RUN, description="Flood")
 commands.register("admin_ext_prompt", permission="testapp.purge_device")

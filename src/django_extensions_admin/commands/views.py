@@ -178,7 +178,7 @@ class CommandViews:
         }
 
     def dispatch(self, request, registration, payload):
-        """Queue the run and redirect to its result, or say why nothing was queued."""
+        """Queue the run and redirect to its result, or say why it may not be queued."""
         if open_transaction():
             messages.error(
                 request,
@@ -193,12 +193,22 @@ class CommandViews:
         from .tasks import enqueue_on_commit
 
         try:
-            result = enqueue_on_commit(registration.name, payload, request.user.pk, backend.alias)
+            # A string: task arguments must be JSON, and a UUID or other non-integer
+            # primary key is not. The worker's pk lookup and the reference accept it.
+            actor_id = str(request.user.pk)
+            result = enqueue_on_commit(registration.name, payload, actor_id, backend.alias)
         except Exception as exc:
             logger.exception("Could not queue admin command %r", registration.name)
+            # The backend may have stored the run before failing (django-tasks-db inserts
+            # the row, then sends task_enqueued); a stored run still executes. Say so,
+            # rather than invite a second run of a command that may not be idempotent.
             messages.error(
                 request,
-                _("Nothing was queued: the task backend refused the run (%s).")
+                _(
+                    "The run may not have been queued: the task backend raised %s. If it "
+                    "was stored before the error, a worker will still run it, so check "
+                    "before running the command again."
+                )
                 % type(exc).__name__,
             )
             return None

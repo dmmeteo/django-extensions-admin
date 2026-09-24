@@ -8,9 +8,12 @@ TransactionTestCase throughout the launch paths: TestCase holds every test insid
 
 import json
 import os
+import signal
 import subprocess
 import sys
-from datetime import timedelta
+import uuid
+from datetime import datetime, timedelta
+from importlib import import_module
 from pathlib import Path
 from unittest import mock
 
@@ -25,11 +28,11 @@ from django.utils import timezone
 from django_tasks_db.models import DBTaskResult
 
 from django_extensions_admin.commands import registry
-from django_extensions_admin.commands.backend import CommandsUnavailable, get_backend
+from django_extensions_admin.commands.backend import CommandsUnavailable, get_backend, tasks_api
 from django_extensions_admin.commands.checks import check_command_runner
 from django_extensions_admin.commands.views import RESULT_SALT
 
-from .testapp.admin import EchoForm
+from .testapp.admin import EchoForm, OptionsForm
 from .testapp.models import Device
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -171,6 +174,18 @@ class CheckTests(SimpleTestCase):
                 with self.assertRaisesMessage(CommandsUnavailable, text):
                     get_backend()
 
+    def test_silencing_the_check_for_test_settings_still_refuses_to_run(self):
+        from django.core import checks
+
+        with (
+            commands_setting(COMMANDS_TASK_BACKEND="dummy"),
+            override_settings(SILENCED_SYSTEM_CHECKS=["django_extensions_admin.E101"]),
+        ):
+            reported = [m.id for m in checks.run_checks() if not m.is_silenced()]
+            self.assertNotIn("django_extensions_admin.E101", reported)
+            with self.assertRaisesMessage(CommandsUnavailable, "DummyBackend"):
+                get_backend()
+
     def test_other_backends_are_unverified(self):
         with commands_setting(COMMANDS_TASK_BACKEND="unreachable"):
             self.assertEqual(self.ids(), ["django_extensions_admin.W101"])
@@ -267,7 +282,8 @@ class LaunchTests(RunnerCase):
         self.assertEqual(self.client.get(launch_url("admin_ext_echo")).status_code, 403)
 
     def test_a_command_without_options_still_needs_a_post(self):
-        response = self.client.get(launch_url("admin_ext_fail"))
+        self.client.force_login(self.root)
+        response = self.client.get(launch_url("admin_ext_prompt"))
         self.assertContains(response, "This command takes no options.")
         self.assertContains(response, 'value="Run"')
 
@@ -322,7 +338,8 @@ class LaunchTests(RunnerCase):
                         "touch": None,
                         "device": str(device.pk),
                     },
-                    "actor_id": self.runner.pk,
+                    # A string, so any primary key type is JSON.
+                    "actor_id": str(self.runner.pk),
                 },
             },
         )
@@ -409,6 +426,7 @@ class BackendFailureTests(RunnerCase):
         self.assertEqual(DBTaskResult.objects.count(), 0)
 
     def test_an_enqueue_failure_is_visible_and_claims_nothing(self):
+        """Honest either way: the backend may or may not have stored the run."""
         with (
             mock.patch(
                 "django_tasks_db.backend.DatabaseBackend.enqueue",
@@ -419,10 +437,37 @@ class BackendFailureTests(RunnerCase):
             response = self.launch()
         self.assertEqual(response.status_code, 503)
         self.assertContains(
-            response, "task backend refused the run (DatabaseError)", status_code=503
+            response,
+            "may not have been queued: the task backend raised DatabaseError",
+            status_code=503,
         )
+        self.assertContains(response, "check before running the command again", status_code=503)
+        self.assertNotContains(response, "Nothing was queued", status_code=503)
         self.assertNotContains(response, "Queued “", status_code=503)
         self.assertEqual(DBTaskResult.objects.count(), 0)
+
+    def test_a_failure_after_the_backend_stored_the_run_does_not_deny_it(self):
+        """django-tasks-db inserts the row, then sends task_enqueued with send(), so a
+        receiver that raises fails the enqueue after the run was stored - and it runs."""
+        task_enqueued = import_module(f"{tasks_api().module}.signals").task_enqueued
+
+        def broken_receiver(**kwargs):
+            raise RuntimeError("a project's receiver failed")
+
+        task_enqueued.connect(broken_receiver, dispatch_uid="admin-ext-test-broken")
+        self.addCleanup(task_enqueued.disconnect, dispatch_uid="admin-ext-test-broken")
+        with self.assertLogs("django_extensions_admin.commands", "ERROR"):
+            response = self.launch(data={"message": "hi", "times": "1", "touch": "stored"})
+        self.assertContains(
+            response,
+            "may not have been queued: the task backend raised RuntimeError",
+            status_code=503,
+        )
+        self.assertContains(response, "a worker will still run it", status_code=503)
+        self.assertNotContains(response, "Nothing was queued", status_code=503)
+        self.assertEqual(self.only_run().status, "READY")  # stored, and it will run
+        run_worker()
+        self.assertTrue(Device.objects.filter(name="stored").exists())
 
     def test_an_unreachable_queue_is_visible(self):
         with (
@@ -430,7 +475,7 @@ class BackendFailureTests(RunnerCase):
             self.assertLogs("django_extensions_admin.commands", "ERROR"),
         ):
             response = self.launch()
-        self.assertContains(response, "(ConnectionError)", status_code=503)
+        self.assertContains(response, "the task backend raised ConnectionError", status_code=503)
 
 
 class ResultTests(RunnerCase):
@@ -472,7 +517,10 @@ class ResultTests(RunnerCase):
 
     def test_a_failed_command_shows_its_error_and_output_but_no_traceback(self):
         location = self.launch_ok("admin_ext_fail", {})
-        run_worker()
+        with self.assertLogs("django_extensions_admin.commands", "ERROR") as logged:
+            run_worker()
+        # The original exception, frames and all, goes to the worker's log.
+        self.assertIn("CommandError: deliberate <b>failure</b>", logged.output[0])
         self.assertTrue(self.only_run().traceback.startswith("Traceback"))
         response = self.client.get(location)
         self.assertContains(response, 'data-state="failed"')
@@ -631,11 +679,43 @@ class WorkerRevalidationTests(RunnerCase):
         inactive = User.objects.create_superuser(
             "gone", "gone@example.invalid", "pw", is_active=False
         )
-        for actor_id in (self.stranger.pk, inactive.pk, 987654, None):
+        not_staff = User.objects.create_user("former", "former@example.invalid", "pw")
+        not_staff.user_permissions.add(Permission.objects.get(codename="run_device_commands"))
+        for actor_id in (
+            self.stranger.pk,  # staff, no permission
+            str(not_staff.pk),  # permission, but no longer staff
+            inactive.pk,
+            987654,
+            str(uuid.uuid4()),  # not a key of this user model at all
+            None,
+        ):
             with self.subTest(actor_id=actor_id):
                 result = enqueue_directly(key="admin_ext_echo", options=options, actor_id=actor_id)
                 self.assertEqual(self.failure_of(result)[0], "CommandNotAllowed")
         self.assertFalse(Device.objects.filter(name="actor").exists())
+
+    def test_losing_staff_status_while_queued_stops_the_run(self):
+        location = self.launch_ok(data={"message": "hi", "times": "1", "touch": "unstaffed"})
+        User.objects.filter(pk=self.runner.pk).update(is_staff=False)
+        run_worker()
+        self.assertEqual(self.only_run().status, "FAILED")
+        self.assertFalse(Device.objects.filter(name="unstaffed").exists())
+        User.objects.filter(pk=self.runner.pk).update(is_staff=True)
+        self.assertContains(self.client.get(location), "may no longer run it")
+
+    def test_the_actor_travels_as_a_string_through_the_worker(self):
+        from django_extensions_admin.commands.tasks import enqueue_on_commit
+
+        result = enqueue_on_commit(
+            "admin_ext_echo", {"message": "s", "times": "1"}, str(self.runner.pk), "commands"
+        )
+        run_worker()
+        self.assertEqual(DBTaskResult.objects.get(id=result.id).status, "SUCCESSFUL")
+        # A UUID key is JSON as a string; enqueueing the UUID object itself would fail.
+        stored = enqueue_on_commit("admin_ext_echo", {}, str(uuid.uuid4()), "commands")
+        self.assertEqual(DBTaskResult.objects.get(id=stored.id).status, "READY")
+        with self.assertRaises(TypeError):
+            enqueue_on_commit("admin_ext_echo", {}, uuid.uuid4(), "commands")
 
     def test_a_launched_run_that_the_worker_refuses_shows_why(self):
         location = self.launch_ok()
@@ -646,3 +726,143 @@ class WorkerRevalidationTests(RunnerCase):
         response = self.client.get(location)
         self.assertContains(response, 'data-state="failed"')
         self.assertContains(response, "may no longer run it")
+
+
+class OptionTests(RunnerCase):
+    """Ordinary Django fields reach the command with their meaning intact."""
+
+    def setUp(self):
+        super().setUp()
+        self.alpha = Device.objects.create(name="alpha")
+        self.beta = Device.objects.create(name="beta")
+
+    def filled(self):
+        return {
+            "limit": "0",  # a meaningful zero is passed, not treated as blank
+            "label": "nightly",
+            "dry_run": "on",
+            "kinds": ["sensor", "relay"],
+            "devices": [str(self.alpha.pk), str(self.beta.pk)],
+            "when_0": "2026-09-24",
+            "when_1": "10:30:00",
+        }
+
+    def output(self, data):
+        location = self.launch_ok("admin_ext_options", data)
+        run_worker()
+        response = self.client.get(location)
+        self.assertContains(response, 'data-state="succeeded"')
+        return response.context["stdout"].splitlines()
+
+    def test_multi_value_fields_survive_the_second_validation(self):
+        form = OptionsForm(data=self.filled())
+        self.assertTrue(form.is_valid(), form.errors)
+        payload = registry.build_payload(form)
+        # Keyed as the widgets read them: the split date/time as its two sub-inputs.
+        self.assertEqual(payload["when_0"], "2026-09-24")
+        self.assertEqual(payload["when_1"], "10:30:00")
+        self.assertEqual(payload["devices"], [str(self.alpha.pk), str(self.beta.pk)])
+        self.assertEqual(payload["kinds"], ["sensor", "relay"])
+        again = OptionsForm(data=payload)
+        self.assertTrue(again.is_valid(), again.errors)
+        self.assertEqual(list(again.cleaned_data["devices"]), [self.alpha, self.beta])
+
+    def test_filled_options_reach_the_command(self):
+        self.assertEqual(
+            self.output(self.filled()),
+            [
+                "limit=0",
+                "label='nightly'",
+                "dry_run=True",
+                "kinds=['sensor', 'relay']",
+                "devices=['alpha', 'beta']",
+                # Read in the active time zone, as the admin's own split widget is.
+                f"when={timezone.make_aware(datetime(2026, 9, 24, 10, 30)).isoformat()!r}",
+            ],
+        )
+
+    def test_blank_optional_fields_leave_the_command_defaults_alone(self):
+        self.assertEqual(
+            self.output({}),
+            [
+                "limit=100",
+                "label='untitled'",
+                "dry_run=False",
+                "kinds=['all']",
+                "devices=None",
+                "when=None",
+            ],
+        )
+
+    def test_an_unticked_boolean_is_still_passed_as_false(self):
+        form = OptionsForm(data={})
+        self.assertTrue(form.is_valid())
+        self.assertEqual(registry.command_arguments(form), {"dry_run": False})
+
+
+class FailureRecordTests(RunnerCase):
+    """What the backend stores about a failure is bounded, whatever the command raised."""
+
+    def test_a_huge_exception_message_is_not_stored(self):
+        location = self.launch_ok("admin_ext_fail", {"padding": "1000000"})
+        with self.assertLogs("django_extensions_admin.commands", "ERROR"):
+            run_worker()
+        run = self.only_run()
+        self.assertEqual(run.status, "FAILED")
+        self.assertLess(len(run.traceback), 10_000)
+        self.assertNotIn("direct cause", run.traceback)
+        self.assertNotIn("CommandError(", run.traceback)
+        response = self.client.get(location)
+        self.assertContains(response, "CommandError: deliberate &lt;b&gt;failure&lt;/b&gt;!!!")
+        self.assertContains(response, "partial output before the failure")
+
+    def test_sys_exit_fails_the_run_with_its_code_and_output(self):
+        location = self.launch_ok("admin_ext_exit", {})
+        with self.assertLogs("django_extensions_admin.commands", "ERROR"):
+            run_worker()
+        self.assertEqual(self.only_run().exception_class_path.rsplit(".", 1)[1], "CommandFailed")
+        response = self.client.get(location)
+        self.assertContains(response, 'data-state="failed"')
+        self.assertContains(response, "SystemExit: exit code 3")
+        self.assertContains(response, "about to exit with 3")
+
+    def test_a_zero_exit_is_a_success(self):
+        location = self.launch_ok("admin_ext_exit", {"code": "0"})
+        run_worker()
+        response = self.client.get(location)
+        self.assertContains(response, 'data-state="succeeded"')
+        self.assertContains(response, "about to exit with 0")
+
+    def test_the_workers_own_shutdown_is_not_swallowed(self):
+        """A second SIGTERM makes db_worker raise SystemExit from its signal handler,
+        wherever the command happens to be. That must still end the worker."""
+        from django_tasks_db.management.commands.db_worker import Worker
+
+        from django_extensions_admin.commands.tasks import run_command
+
+        saved = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
+        self.addCleanup(lambda: [signal.signal(sig, h) for sig, h in saved.items()])
+        worker = Worker(
+            queue_names=["default"],
+            interval=0,
+            batch=True,
+            backend_name="commands",
+            startup_delay=False,
+            max_tasks=None,
+            worker_id="shutdown-test",
+            excluded_queue_names=[],
+        )
+        worker.running = False  # the first signal has already arrived
+
+        def interrupted(*args, **kwargs):
+            worker.shutdown(signal.SIGTERM, None)
+
+        with (
+            mock.patch(
+                "tests.testapp.management.commands.admin_ext_echo.Command.handle",
+                side_effect=interrupted,
+            ),
+            self.assertRaises(SystemExit) as caught,
+        ):
+            run_command.func("admin_ext_echo", {"message": "m", "times": "1"}, str(self.root.pk))
+        self.assertEqual(caught.exception.code, 1)

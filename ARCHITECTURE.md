@@ -141,9 +141,12 @@ Keep command URLs opt-in through a narrow AdminSite integration; JSON/buttons/fi
 Result authorization: bind each run to the initiating actor and the correct task/backend. A task ID alone is not authority. The spike found no actor metadata in either backend, so the first runner uses a small signed reference (result ID, alias, initiating user) checked together with the command permission. Showing runs to other admins or listing them would need minimal metadata persistence, which is a product decision. Do not smuggle in a full run-history model. Logs/results need bounded size, output sanitization and capability-aware availability. Dispatch follows transaction commit when needed; retries are explicit for non-idempotent commands.
 
 As shipped (wave 5). The shape is `commands.register(name, permission=..., form=...)` in an `admin.py`, which is autodiscovered in the worker too, plus `commands.urls(site)` included ahead of `site.urls`. There is no AdminSite subclass, and nothing is routed unless it is included.
-- **Payload.** It is the form's submitted values as JSON. They are validated a second time before enqueue, and again in the worker, so a model choice travels as a key.
-- **Worker checks.** The worker also rechecks the registration and the launching user's permission.
-- **Failures.** A failure is a truthful backend `FAILED`. Its JSON summary, which is the exception line and bounded output, is shown instead of the traceback.
+- **Payload.** It is the form's submitted values as JSON, keyed as the widgets read them (a split field as its sub-inputs). They are validated a second time before enqueue, comparing prepared values so querysets compare by keys, and again in the worker, so a model choice travels as a key.
+- **Blank options.** A blank non-required field is left out of `call_command()`, so the command's argparse default applies. `False` and `0` are passed.
+- **Worker checks.** The worker also rechecks the registration and the launching user: active staff, the admin boundary, plus the permission. The actor id is a string, so non-integer keys work.
+- **Failures.** A failure is a truthful backend `FAILED`, raised `from None`. What is stored is only the bounded JSON summary (the exception line and bounded output), which is shown instead of the traceback; the original goes to the worker log. A non-zero `sys.exit()` is a failure, while the worker's own shutdown `SystemExit` propagates.
+- **Enqueue errors.** They are reported as "may not have been queued", because django-tasks-db can store the row before `task_enqueued` raises.
+- **Registration.** It must happen in a module that both processes import: `admin.py` under `AdminConfig`, or `AppConfig.ready()` under `SimpleAdminConfig`.
 - **Transactions.** The launch view opts out of `ATOMIC_REQUESTS` on every database alias and refuses inside an open transaction. That is the honest consequence of dispatching on commit without persistence.
 - **Imports.** Nothing outside `commands/` imports it, and the wheel depends on Django alone. Backend installation is one documented line per Django version, because django-tasks-db's `[compat]` extra pins Django below 6.0.
 

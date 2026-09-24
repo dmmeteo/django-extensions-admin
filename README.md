@@ -451,7 +451,7 @@ and output. Adoption is explicit: installing the app adds no route, and none of 
 features imports a Tasks package.
 
 ```python
-# admin.py - admin modules are imported in every process, the worker included
+# admin.py - autodiscovered in the web process and in the worker alike (see below)
 from django import forms
 from django_extensions_admin import commands
 
@@ -525,6 +525,23 @@ The package adds no menu entry. Link to `/admin/commands/` from wherever suits y
   out for a command without options; the page then asks for an explicit Run.
 - **`description`** is the label. It defaults to the command name.
 
+**Blank options.** A field that is not required and is left blank is not passed, so the
+command's own argparse default applies. "Blank" means the cleaned value is one of the
+field's own `empty_values` (`None`, `""`, an empty list), or an empty queryset. Everything
+else is passed as cleaned, including `0` and an unticked `BooleanField`'s `False`. Ordinary
+multi-value fields work unchanged:
+- `MultipleChoiceField` and `ModelMultipleChoiceField`, where the worker looks the objects
+  up again;
+- split fields such as `SplitDateTimeField`, which are sent as their sub-inputs.
+
+**Where to register.** Register at import time of a module that both the web process and the
+worker load. With the default `django.contrib.admin` (`AdminConfig`), every app's `admin.py`
+is autodiscovered in each process that calls `django.setup()`, `db_worker` included, so
+`admin.py` works. With `SimpleAdminConfig`, `autodiscover()` usually runs from `urls.py`,
+which the worker never imports. Register from your `AppConfig.ready()` instead. A worker that
+lacks a registration refuses the run: it fails as "not a registered admin command", and
+nothing runs.
+
 The system checks catch these mistakes:
 - an unknown command;
 - a field that is not one of the command's options;
@@ -547,7 +564,7 @@ run's result page:
 | Queued | Waiting for a worker. The page reloads itself every 3 s with a `<meta>` refresh; no JavaScript. |
 | Running | A worker has claimed it. |
 | Succeeded | Captured `stdout` and `stderr`, escaped. |
-| Failed | The exception type and message, plus the output written before it. Never the traceback. |
+| Failed | The exception type and message (or `SystemExit: exit code N` for a command that calls `sys.exit()` with a non-zero code), plus the output written before it. Never the traceback. |
 | Unavailable | The result was pruned, is unknown, or belongs to a backend alias that is no longer configured. |
 
 A run still queued or running after `COMMANDS_STALE_AFTER` stops reloading and shows a
@@ -562,10 +579,15 @@ whether a worker is serving the alias. Runs are never retried automatically.
 - **The payload is the form's submitted values, as JSON, plus the command key and user id.**
   Before queueing, the values are validated a second time; any that would come back
   different are refused.
-- **The worker trusts none of the payload.** It looks the key up in its own registry,
-  requires the launching user to be active and still permitted, and validates the options
-  against the registered form. Only then does it call `call_command()`. It passes
-  `interactive=False` when the command has that option.
+- **The worker trusts none of the payload.** It checks, in order:
+  - the key, against its own registry;
+  - the launching user: still an active **staff** member, the same boundary as the admin
+    pages, and still holding the permission;
+  - the options, against the registered form.
+
+  Only then does it call `call_command()`. It passes `interactive=False` when the command has
+  that option. The user id travels as a string, so UUID and other non-integer primary keys
+  work.
 - **Result pages are for the initiator only.** A result is reached through a signed reference
   binding the result id, backend alias, command and initiating user. Anyone else gets a 404,
   superusers included. The permission is checked again on every view. A raw task id grants
@@ -576,12 +598,28 @@ whether a worker is serving the alias. Runs are never retried automatically.
   `admin.site.unregister(DBTaskResult)` if the initiator-only pages should be the only view.
 - **Output is bounded and escaped.** `COMMANDS_OUTPUT_LIMIT` characters are kept per stream,
   cut in the worker and again on the page. HTML-looking output is shown as text.
+- **What a failure stores is bounded too.**
+  - **The stored record** is a bounded summary: an error line of up to 2,000 characters, plus
+    the bounded output. The command's original exception is not chained into it.
+  - **The worker's log** gets the full original exception, logged at ERROR by
+    `django_extensions_admin.commands`.
+  - **Exit codes:** a `sys.exit()` with a non-zero code fails the run, and `sys.exit(0)` counts
+    as success.
+  - **Worker shutdown:** the `SystemExit` that `db_worker` raises on a second SIGTERM still
+    stops the worker.
 - **Misconfiguration is refused, never worked around.** An unset or unknown alias, the
   `ImmediateBackend` or `DummyBackend`, or a backend that cannot read results back produces
-  a system check error. The pages show the same error and offer no Run button. A POST
-  returns 503. Nothing ever runs inline.
-- **Queue failures are shown, not hidden.** If the backend refuses an enqueue, the page says
-  so with a 503. It shows no "queued" message.
+  a system check error (`django_extensions_admin.E101`). The pages show the same error and
+  offer no Run button. A POST returns 503. Nothing ever runs inline. For test or development
+  settings that deliberately point the alias at `DummyBackend` or `ImmediateBackend`, add
+  `SILENCED_SYSTEM_CHECKS = ["django_extensions_admin.E101"]` there. That lets `test`,
+  `runserver` and `migrate` start; the pages still refuse to run anything.
+- **Queue failures are shown, not hidden.** If the backend raises during an enqueue, the page
+  answers 503 and says the run *may not* have been queued. It never claims either way,
+  because a backend can store the run before it fails. django-tasks-db inserts the row, then
+  sends `task_enqueued`, and a receiver that raises leaves a stored run that a worker will
+  still execute. Check before running a non-idempotent command again. The definite refusals
+  (no usable backend, an open transaction) say "Nothing was queued".
 
 ### Transactions and `ATOMIC_REQUESTS`
 
@@ -705,7 +743,11 @@ and Safari are untested.
   - **Visibility.** It shows a run to its initiator only. There is no run list, history or
     dashboard, and no way to show a run to another admin.
   - **What it runs.** It passes options only: no positional arguments and no file uploads.
-    The form is built with `data=` alone, without the request.
+    The form is built with `data=` alone, without the request. A blank optional field is
+    left out rather than passed, so it cannot pass an explicit `None` or `""`.
+  - **What the worker rechecks.** The worker has no request and no `AdminSite`. It rechecks
+    active staff plus the command permission, not a project's customised
+    `AdminSite.has_permission()`.
   - **What it captures.** Only `self.stdout` and `self.stderr` are captured, not `print()`
     or logging. Output arrives when the run finishes; nothing is streamed.
   - **What it does not do.** No cancellation, retries, scheduling or priorities. A run whose

@@ -50,3 +50,6 @@ ignore = ["S101", "RUF012"]
 "browser_tests/*" = ["S105", "S106", "S107", "S311"]
 "demo/*" = ["S105", "S106", "S107", "S311"]
 "demo/demoapp/migrations/*" = ["E501", "S105", "S106", "S107", "S311"]
+# Disposable evidence harness: it launches workers and probes as child processes.
+"spikes/*" = ["S105", "S603", "S607"]
+"spikes/*/spikeapp/migrations/*" = ["E501"]

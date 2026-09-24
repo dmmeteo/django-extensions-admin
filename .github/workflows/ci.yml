@@ -1,8 +1,8 @@
 name: CI
 
 # The part of scripts/verify.sh that runs reliably on a GitHub-hosted Linux runner:
-# lint and the Django test matrix. The wheel/install smoke and the headless-browser
-# smoke stay in scripts/verify.sh and are run locally.
+# lint, the Django test matrix and the real-worker journeys. The wheel/install smoke and
+# the headless-browser smoke stay in scripts/verify.sh and are run locally.
 
 on:
   push:
@@ -30,14 +30,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        django: ["5.2.*", "6.0.*"]
+        # Each lane installs the command-runner backend exactly as README documents it.
+        include:
+          - django: "5.2.*"
+            tasks: "django-tasks-db[compat]==0.13.0"
+          - django: "6.0.*"
+            tasks: "django-tasks-db==0.13.0"
+    env:
+      PYTHONPATH: src:.
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - name: Run the test suite on Django ${{ matrix.django }}
-        env:
-          PYTHONPATH: src
         run: >-
           uv run --no-project --python 3.13
-          --with "django==${{ matrix.django }}"
+          --with "django==${{ matrix.django }}" --with "${{ matrix.tasks }}"
           python tests/runtests.py tests
+      - name: Run the command runner against a real db_worker
+        env:
+          DJANGO_SETTINGS_MODULE: worker_tests.settings
+        run: >-
+          uv run --no-project --python 3.13
+          --with "django==${{ matrix.django }}" --with "${{ matrix.tasks }}"
+          python tests/runtests.py worker_tests

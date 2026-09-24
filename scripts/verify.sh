@@ -23,7 +23,7 @@ step() { printf '\n=== %s ===\n' "$1"; }
 fail() { printf '\nGATE FAILED: %s\n' "$1" >&2; exit 1; }
 
 # --------------------------------------------------------------------------
-step "1/8 preflight"
+step "1/9 preflight"
 command -v uv  >/dev/null || fail "uv is required (https://docs.astral.sh/uv/)"
 command -v node >/dev/null || fail "node is required for the JavaScript syntax check"
 
@@ -54,7 +54,7 @@ ensure_env() {
 }
 
 # --------------------------------------------------------------------------
-step "2/8 lint"
+step "2/9 lint"
 ensure_env tools "ruff==0.14.*"
 "$VENVS/tools/bin/ruff" check . 2>&1 | tee "$ART/lint-ruff-check.txt"
 "$VENVS/tools/bin/ruff" format --check . 2>&1 | tee "$ART/lint-ruff-format.txt"
@@ -68,7 +68,7 @@ for js in $JS_FILES; do
 done | tee "$ART/lint-js.txt"
 
 # --------------------------------------------------------------------------
-step "3/8 naming check"
+step "3/9 naming check"
 # The distribution was renamed; no identifier from an earlier working name may survive.
 # --exclude: this script carries the pattern itself and would match on every run.
 LEFTOVERS=$(grep -rniE 'admin[-_]kit|adminkit|jsonkit' \
@@ -85,7 +85,7 @@ echo "no stale identifiers; distribution django-extensions-admin, module django_
   | tee "$ART/naming.txt"
 
 # --------------------------------------------------------------------------
-step "4/8 build wheel"
+step "4/9 build wheel"
 rm -rf "$ROOT/dist"
 uv build --wheel --out-dir "$ROOT/dist" >"$ART/build.txt" 2>&1 || { cat "$ART/build.txt"; fail "wheel build failed"; }
 WHEEL=$(ls "$ROOT/dist"/*.whl)
@@ -107,9 +107,24 @@ required = [
     "django_extensions_admin/templates/django_extensions_admin/buttons/confirm.html",
     "django_extensions_admin/templates/django_extensions_admin/filters/range.html",
     "django_extensions_admin/templates/django_extensions_admin/filters/choice.html",
+    "django_extensions_admin/static/django_extensions_admin/commands.css",
+    "django_extensions_admin/templates/django_extensions_admin/commands/index.html",
+    "django_extensions_admin/templates/django_extensions_admin/commands/launch.html",
+    "django_extensions_admin/templates/django_extensions_admin/commands/result.html",
 ]
 missing = [name for name in required if name not in names]
 print("\n".join(sorted(names)))
+# The runner's backend is the application's choice: the wheel depends on Django alone.
+metadata = next(n for n in names if n.endswith(".dist-info/METADATA"))
+requires = [
+    line.split(":", 1)[1].strip()
+    for line in zipfile.ZipFile(sys.argv[1]).read(metadata).decode().splitlines()
+    if line.startswith("Requires-Dist:")
+]
+print("Requires-Dist:", requires)
+if requires != ["Django<7,>=5.2"] and requires != ["django<7,>=5.2"]:
+    sys.stderr.write(f"unexpected dependencies: {requires}\n")
+    raise SystemExit(1)
 if missing:
     sys.stderr.write("missing from wheel:\n" + "\n".join(missing) + "\n")
     raise SystemExit(1)
@@ -118,7 +133,7 @@ PY
 echo "wheel contains every template and static asset"
 
 # --------------------------------------------------------------------------
-step "5/8 clean-install smoke"
+step "5/9 clean-install smoke"
 rm -rf "$VENVS/smoke"
 uv venv --python "$PY_VERSION" "$VENVS/smoke" >/dev/null
 uv pip install --python "$VENVS/smoke/bin/python" --quiet "$WHEEL"
@@ -198,15 +213,33 @@ for filter_class in (ChoiceFilter, MultipleChoiceFilter):
 assert (ChoiceFilter.multiple, MultipleChoiceFilter.multiple) == (False, True)
 get_template("django_extensions_admin/filters/choice.html")
 assert finders.find("django_extensions_admin/choice-filters.js"), "staticfiles cannot find it"
+
+# No Tasks package is installed here. Every feature above imported without one, and
+# nothing loaded the runner or a Tasks API on the way.
+from importlib.util import find_spec
+assert find_spec("django_tasks_db") is None and find_spec("django_tasks") is None
+loaded = [m for m in sys.modules if m.startswith(("django_extensions_admin.commands",
+                                                  "django_tasks", "django.tasks"))]
+assert not loaded, f"non-runner imports loaded task machinery: {loaded}"
+# Adopting the runner is explicit, and without a backend it says so instead of running.
+from django_extensions_admin import commands
+commands.register("check", permission="auth.view_user")
+from django.core import checks
+errors = [m.id for m in checks.run_checks() if m.id.startswith("django_extensions_admin.")]
+assert errors == ["django_extensions_admin.E101"], errors
+for name in ("index", "launch", "result"):
+    get_template(f"django_extensions_admin/commands/{name}.html")
+assert finders.find("django_extensions_admin/commands.css")
 print(f"import smoke OK: django_extensions_admin {pkg.__version__} from {root}")
 PY
 ) | tee "$ART/smoke-install.txt"
 
 # --------------------------------------------------------------------------
-step "6/8 test matrix"
+step "6/9 test matrix"
+# Each lane installs exactly the line README documents for its Django version.
 run_suite() {
-  local env="$1" spec="$2" label="$3"
-  ensure_env "$env" "django==$spec"
+  local env="$1" spec="$2" label="$3" tasks="$4"
+  ensure_env "$env" "django==$spec" "$tasks"
   local version
   version="$("$VENVS/$env/bin/python" -c 'import django; print(django.get_version())')"
   echo "django ($env) $version" >> "$ART/versions.txt"
@@ -215,12 +248,33 @@ run_suite() {
     > "$ART/tests-$env.txt" 2>&1 || { tail -40 "$ART/tests-$env.txt"; fail "$label suite failed"; }
   tail -3 "$ART/tests-$env.txt"
 }
-run_suite dj52 "5.2.*" "Django 5.2 LTS"
-run_suite dj60 "6.0.*" "Django 6.0"
+TASKS_DB="django-tasks-db==0.13.0"
+run_suite dj52 "5.2.*" "Django 5.2 LTS" "django-tasks-db[compat]==0.13.0"
+run_suite dj60 "6.0.*" "Django 6.0" "$TASKS_DB"
+echo "tasks         $("$VENVS/dj60/bin/python" -c 'import importlib.metadata as m; print("django-tasks-db", m.version("django-tasks-db"))')" >> "$ART/versions.txt"
 
 # --------------------------------------------------------------------------
-step "7/8 browser smoke"
-ensure_env browser "django==6.0.*" "playwright==1.63.0"
+step "7/9 real worker"
+# The command runner end to end: the admin in the test process, a separately started
+# db_worker process on a shared SQLite file, and a third process for pruning.
+rm -rf "$ART/worker"
+for env in dj52 dj60; do
+  echo "--- worker journeys: $env ---"
+  PYTHONPATH="$ROOT/src:$ROOT" DJANGO_SETTINGS_MODULE=worker_tests.settings \
+    WORKER_ARTIFACTS="$ART/worker/$env" \
+    "$VENVS/$env/bin/python" tests/runtests.py worker_tests \
+    > "$ART/tests-worker-$env.txt" 2>&1 || { tail -40 "$ART/tests-worker-$env.txt"; fail "$env worker journeys failed"; }
+  tail -3 "$ART/tests-worker-$env.txt"
+done
+if pgrep -f "django db_worker" >/dev/null; then
+  pgrep -af "django db_worker"
+  fail "a db_worker process outlived its test"
+fi
+rm -f "$ART"/worker/*/*.sqlite3
+
+# --------------------------------------------------------------------------
+step "8/9 browser smoke"
+ensure_env browser "django==6.0.*" "$TASKS_DB" "playwright==1.63.0"
 BROWSER_PY="$VENVS/browser/bin/python"
 CHROMIUM=$("$BROWSER_PY" -c "
 from playwright.sync_api import sync_playwright
@@ -246,7 +300,7 @@ SHOTS=$(find "$ART/browser" -name '*.png' | wc -l)
 echo "$SHOTS screenshots in artifacts/browser"
 
 # --------------------------------------------------------------------------
-step "8/8 cleanup"
+step "9/9 cleanup"
 # The live server and its in-memory database belong to the test process and are gone
 # with it. Nothing else is started here, so nothing else is killed: a demo server the
 # user started stays up on purpose.

@@ -37,3 +37,10 @@ if os.environ.get("WORKER_USE_TEST_DB"):
     DATABASES["default"]["NAME"] = DATABASES["default"]["TEST"]["NAME"]
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 ALLOWED_HOSTS = ["*"]
+
+# Every journey runs on the stock admin: the demo's branding adoption is taken out here,
+# and test_branding puts it back with override_settings.
+DEMO_TEMPLATES = TEMPLATES  # noqa: F405
+DEMO_BRANDING = ADMIN_EXTENSIONS["BRANDING"]  # noqa: F405
+TEMPLATES = [{**DEMO_TEMPLATES[0], "DIRS": []}]
+ADMIN_EXTENSIONS = {k: v for k, v in ADMIN_EXTENSIONS.items() if k != "BRANDING"}  # noqa: F405

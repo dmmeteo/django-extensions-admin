@@ -124,6 +124,8 @@ class ReadingAdmin(admin.ModelAdmin):
         ("device", ChoiceFilter),
     )
     search_fields = ("label",)
+    # Select2 on the change form, searching DeviceAdmin.search_fields.
+    autocomplete_fields = ("device",)
 
 
 # --- management commands ----------------------------------------------------------------

@@ -39,6 +39,8 @@ ROOT_URLCONF = "demoproject.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
+        # demo/templates/admin/base_site.html is the one-line branding adoption.
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -67,4 +69,28 @@ DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 # `manage.py db_worker --backend commands` next to the server.
 TASKS = {"commands": {"BACKEND": "django_tasks_db.DatabaseBackend"}}
 
-ADMIN_EXTENSIONS = {"JSON_WIDGET_DEFAULT": True, "COMMANDS_TASK_BACKEND": "commands"}
+ADMIN_EXTENSIONS = {
+    "JSON_WIDGET_DEFAULT": True,
+    "COMMANDS_TASK_BACKEND": "commands",
+    # Read by the branding template that demo/templates/admin/base_site.html extends.
+    # Django's own colour variable names; light values unless noted, and dark mode keeps
+    # Django's own values for anything not in DARK_COLORS.
+    "BRANDING": {
+        "LOGO": "demoapp/logo.svg",
+        "COLORS": {
+            "secondary": "#1d4e44",  # header, buttons (every theme, as in Django)
+            "accent": "#f2c14e",  # the site name
+            "button-hover-bg": "#143831",
+            "default-button-bg": "#143831",
+            "primary": "#3f7f70",  # module captions
+            "breadcrumbs-bg": "#143831",
+            "link-fg": "#1d6b5a",
+            "link-hover-color": "#0f3d33",
+        },
+        "DARK_COLORS": {
+            "primary": "#1f4a41",
+            "link-fg": "#7fd1bd",
+            "link-hover-color": "#a9e3d4",
+        },
+    },
+}

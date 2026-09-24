@@ -1,0 +1,9 @@
+{% extends "django_extensions_admin/branding/base_site.html" %}
+{% comment %}
+The demo's one-line branding adoption; the logo and colours are ADMIN_EXTENSIONS["BRANDING"]
+in settings.py. Project CSS would go here, after the branding layer:
+
+    {% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="...">{% endblock %}
+
+Delete this file and the stock admin is back.
+{% endcomment %}

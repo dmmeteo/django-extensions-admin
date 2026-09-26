@@ -7,21 +7,23 @@ build step, no runtime dependency beyond Django. The command runner alone needs 
 Tasks backend, which you install only if you use it.
 
 > **Independent project.** Inspired by the spirit of `django-extensions`, but not
-> official, not affiliated with it, and it does not depend on it. The name is
-> provisional and the package is not published on any package index.
+> official, not affiliated with it, and it does not depend on it.
+
+> **Release status.** Version 0.1.0 is prepared but **not yet published on PyPI**. Until the
+> first upload succeeds, install it from the repository.
 
 ## Philosophy
 
 **Ordinary Django, with repetitive work removed.**
 
-[PHILOSOPHY.md](PHILOSOPHY.md) is the accepted direction for feature selection, planning,
+[PHILOSOPHY.md](https://github.com/dmmeteo/django-extensions-admin/blob/main/PHILOSOPHY.md) is the accepted direction for feature selection, planning,
 API design and review. Read it before proposing changes; use its short **Philosophy fit**
 check in plans. Independent utilities, native Django primitives and the stock admin
 experience come before breadth of features.
 
 ## Install
 
-Not on PyPI. Install from the repository:
+Not on PyPI yet. Install from the repository:
 
 ```bash
 uv pip install "git+https://github.com/dmmeteo/django-extensions-admin"
@@ -656,7 +658,7 @@ All under `ADMIN_EXTENSIONS`:
 Other backends that can read results back get a system check warning (`W101`), not a promise.
 Celery (django-tasks-celery 0.1.1) is not supported: lost and unknown results look like
 pending ones, and rolled-back transactions still dispatch. The evidence is in
-[the decision note](docs/decisions/actions-and-task-execution.md).
+[the decision note](https://github.com/dmmeteo/django-extensions-admin/blob/main/docs/decisions/actions-and-task-execution.md).
 
 ### Removing the command runner
 
@@ -805,21 +807,25 @@ bash scripts/verify.sh
 
 The gate runs, in order:
 - lint (Ruff + `node --check`) and a naming check;
-- a wheel build, checked against an asset manifest and for Django being its only dependency;
-- a clean-install import smoke from the wheel, **with no Tasks package installed**;
-- the test suite on both supported Django versions, each with its documented
-  django-tasks-db install;
-- the command runner end to end against a **separately started `db_worker` process** on both
-  versions;
+- a wheel and sdist build, checked against an asset manifest, for Django being the only
+  dependency, for nothing but the package, README, ROADMAP and LICENSE being shipped, and
+  with `twine check --strict`;
+- a clean-install import smoke from each of the wheel and the sdist on Python 3.14,
+  **with no Tasks package installed**;
+- the test suite on three lanes (below), each with its documented django-tasks-db install;
+- the command runner end to end against a **separately started `db_worker` process** on
+  every lane;
 - the headless-browser smoke, with screenshots into `artifacts/`.
 
 The worker journeys also run against PostgreSQL: set `WORKER_PG=host:port` (user, password
 and database `deadmin`) and run
 `DJANGO_SETTINGS_MODULE=worker_tests.settings python tests/runtests.py worker_tests`.
 
-GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the part of
-that gate which is reliable on a hosted Linux runner: lint, the test suite and the worker
-journeys on Django 5.2 and 6.0. The wheel/install smoke and the browser smoke stay local.
+GitHub Actions
+([`.github/workflows/ci.yml`](https://github.com/dmmeteo/django-extensions-admin/blob/main/.github/workflows/ci.yml))
+runs the part of that gate which is reliable on a hosted Linux runner: lint, the test suite
+and the worker journeys on the same three lanes. The artifact checks and the browser smoke
+stay local. Releasing is covered by [RELEASING.md](https://github.com/dmmeteo/django-extensions-admin/blob/main/RELEASING.md).
 
 ## Tested versions
 
@@ -827,15 +833,15 @@ Exactly what the gate runs, and nothing is claimed beyond it:
 
 | | Version |
 | --- | --- |
-| Python | CPython 3.13 |
-| Django | 5.2 LTS and 6.0 |
+| Python and Django lanes | Django 5.2 LTS on CPython 3.14 and on 3.12; Django 6.0 on CPython 3.13 |
+| Install smoke | wheel and sdist on CPython 3.14 |
 | Command-runner backend | django-tasks-db 0.13.0 (with django-tasks 0.12 on 5.2), SQLite; PostgreSQL 16 checked separately |
-| Browser | Chromium via Playwright 1.63 (headless) |
+| Browser | Chromium via Playwright 1.63 (headless), Django 6.0 on CPython 3.13 |
 | OS | Linux x86-64 |
 
 `requires-python = ">=3.12"` and `Django>=5.2,<7` are the declared bounds. Other
-combinations inside those bounds are plausible but **untested**; Windows, macOS, Firefox
-and Safari are untested.
+combinations inside those bounds (Django 6.0 on 3.12 or 3.14, Django 5.2 on 3.13) are
+plausible but **untested** by the gate; Windows, macOS, Firefox and Safari are untested.
 
 ## Limitations
 
@@ -890,9 +896,9 @@ and Safari are untested.
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for feature candidates and
-[ARCHITECTURE.md](ARCHITECTURE.md) for the proposed structure and incremental implementation slices.
+See [ROADMAP.md](https://github.com/dmmeteo/django-extensions-admin/blob/main/ROADMAP.md) for feature candidates and
+[ARCHITECTURE.md](https://github.com/dmmeteo/django-extensions-admin/blob/main/ARCHITECTURE.md) for the proposed structure and incremental implementation slices.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](https://github.com/dmmeteo/django-extensions-admin/blob/main/LICENSE).

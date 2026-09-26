@@ -1,15 +1,16 @@
 [build-system]
-requires = ["hatchling>=1.25"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
 name = "django-extensions-admin"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Independent, additive utilities for the Django admin: buttons, a JSON field widget, list filters, an opt-in management-command runner on Django Tasks and opt-in restrained branding. Not affiliated with django-extensions."
 readme = "README.md"
 requires-python = ">=3.12"
-license = { file = "LICENSE" }
-authors = [{ name = "Django Stars" }]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "dmmeteo" }]
 keywords = ["django", "admin", "buttons", "json", "widget", "filters", "list_filter", "management commands", "tasks", "branding"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -18,9 +19,10 @@ classifiers = [
     "Framework :: Django :: 5.2",
     "Framework :: Django :: 6.0",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = ["Django>=5.2,<7"]
 
@@ -29,11 +31,15 @@ Homepage = "https://github.com/dmmeteo/django-extensions-admin"
 Source = "https://github.com/dmmeteo/django-extensions-admin"
 Issues = "https://github.com/dmmeteo/django-extensions-admin/issues"
 
+[tool.hatch.version]
+path = "src/django_extensions_admin/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/django_extensions_admin"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/django_extensions_admin", "README.md", "ROADMAP.md", "LICENSE"]
+# Anchored: an unanchored "README.md" also matches spikes/*/README.md.
+include = ["/src/django_extensions_admin", "/README.md", "/ROADMAP.md", "/LICENSE"]
 
 [tool.ruff]
 line-length = 100

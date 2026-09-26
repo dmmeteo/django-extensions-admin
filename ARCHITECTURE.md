@@ -1,8 +1,8 @@
 # Architecture proposal
 
-Status: architecture direction accepted by the user, including the independent `admin.button` API with `changelist_buttons`, `changeform_buttons` and `row_buttons`, and the simpler Fabriq-style JSON widget direction. Both are now implemented; the JSON simplification below describes shipped behavior. The range filters of wave 3 and the choice filters after them are implemented too, and the Filters section below describes what ships rather than a proposal. The minimal command runner of wave 5 is implemented as well; the Management commands section describes what ships. Restrained branding (wave 6) is implemented too, and the Branding section describes what ships. Local decomposition remains revisable; backend/REPL questions below remain open. This is not a description of shipped features or authorization to implement the entire roadmap. Approval reference: Discord message 1551266173528703077.
+Status: architecture direction accepted by the user, including the independent `admin.button` API with `changelist_buttons`, `changeform_buttons` and `row_buttons`, and the simpler Fabriq-style JSON widget direction. Both are now implemented; the JSON simplification below describes shipped behavior. The range filters of wave 3 and the choice filters after them are implemented too, and the Filters section below describes what ships rather than a proposal. The minimal command runner of wave 5 is implemented as well; the Management commands section describes what ships. Restrained branding (wave 6) is implemented too, and the Branding section describes what ships. Local decomposition remains revisable. REPL, terminal and coding-agent chat work is no longer a planned wave of this package; see REPL below. Version 0.1.0 is prepared for a first release but not published. This is not a description of shipped features or authorization to implement the entire roadmap. Approval reference: Discord message 1551266173528703077.
 
-Scope: django-extensions-admin, the reusable library. The user's upcoming application is its first consumer, not the subject of this architecture. Its repository and requirements are not yet supplied.
+Scope: django-extensions-admin, the reusable library. The user's application is its first known consumer (Python 3.14, Django 5.2), not the subject of this architecture. It has no model, JSON field or button suited to a pilot yet.
 
 Read [PHILOSOPHY.md](PHILOSOPHY.md) first. This plan applies the prepared architecture-foundation v1: recognizable responsibilities, framework-native roles, small useful slices, economical evidence and removable integrations. Local decomposition may change when implementation reveals a simpler shape.
 
@@ -86,7 +86,7 @@ ARCHITECTURE.md                 this revisable proposal
 ROADMAP.md                      feature candidates and next slices
 ```
 
-Python package markers omitted. REPL remains a desired feature, but its transport/session design needs a spike before adding a shell package. Advanced query search likewise has no speculative parser or empty package yet.
+Python package markers omitted. There is no REPL or shell package here, and none is planned (see REPL below). Advanced query search likewise has no speculative parser or empty package yet.
 
 ## Boundaries and native contracts
 
@@ -164,9 +164,9 @@ As shipped (wave 6):
 - **CSP.** The `<style>` takes Django 6.0's `csp_nonce` when the CSP middleware provides one.
 - **Proof.** Unit tests show every page body (index, changelist, change form with inlines and JSON, validation errors, login, command pages) is byte-identical with and without branding apart from the one `<img>`. Browser journeys cover themes, the toggle, 375/390 px, keyboard order, project overrides and missing parts. Only the stock admin is claimed.
 
-### REPL
+### REPL, terminal and agent chat
 
-REPL is a separate explicit opt-in with feature-local dependencies and a separately authorized route. Its exploratory task must resolve authentication, session/process lifecycle, expiry, resource limits and deployment transport, and evaluate Ghostty frontend feasibility. It is arbitrary Python execution with application privileges, not a sandbox. Do not force WebSockets/ASGI tooling onto the rest of the package before that decision.
+Not a core feature and not the next one. A browser REPL, terminal or coding-agent chat is arbitrary execution with application privileges, and its transport (WebSockets/ASGI, process lifecycle, session expiry, resource limits) would pull a stack onto a package that is meant to stay a lightweight toolkit. If it is pursued, it belongs in a separate, optional companion package with its own dependencies, route and authorization, evaluated on its own. Nothing in this package prepares for it, and installing this package must never expose it.
 
 ## Dependency and removal rules
 
@@ -182,7 +182,7 @@ Queue only one bounded outcome at a time; these are proposed tasks, not dispatch
 
 1. **Independent Django-like buttons.** Implement the separate button decorator and changelist/changeform/row placement lists. Prove buttons never leak into the action dropdown, native actions stay intact, object handlers can be reused in two positions, and permission/CSRF/intermediate responses/list_editable work. No backend or branding changes.
    **Separate bounded cleanup before the consumer pilot:** done - JSON rendering was simplified against the Fabriq UX reference, removing the custom Python parser and the duplicated JS grammar rather than relocating them, closing the readonly-only asset gap, and restating the fidelity guarantee honestly in the README.
-2. **First consumer pilot.** Once the user supplies the application, install a local wheel and integrate one useful button and JSON field. Record integration friction; do not pull application business logic into the library. This feedback may reorder subsequent work.
+2. **First consumer pilot.** Still the next evidence-producing outcome. The first known consumer has no model, JSON field or button suited to it yet; the pilot waits for a real one rather than inventing a fixture here. Then install the built wheel and integrate one useful button and JSON field. Record integration friction; do not pull application business logic into the library. This feedback may reorder subsequent work.
 3. **Range filters.** Done, ahead of the consumer pilot: `DateRangeFilter`, `DateTimeRangeFilter` and `NumericRangeFilter` through list_filter, composed with search, ordering, the other filters and the admin's own queryset. Valid, partial, reversed and unreadable input and the active-timezone day boundaries are covered by behavior tests on Django 5.2 and 6.0, plus browser journeys for layout, narrow/dark and the missing-stylesheet fallback. Choice filters followed as the next small slice and are done too: `ChoiceFilter` and `MultipleChoiceFilter`, with same-field OR as repeated Django parameters, M2M de-duplication, tampered-value handling, facets and optional option search. They are covered by behavior tests on Django 5.2 and 6.0 and by browser journeys for the dropdown, OR, composition, Clear, no-JS, search and narrow/dark layout.
 4. **Task-backend spike.** Done: a harmless allowed command, failure, JSON payloads, transaction timing, shutdown and result access ran on real django-tasks-db workers (Django 5.2/6.0/6.1) and a real Celery worker. The decision note records tested versions, observed behaviour and the first-runner boundary. No backend abstraction was added.
 5. **Minimal command runner.** Done: explicit registry, argument form, permitted launch and initiator-only status/output on django-tasks-db.
@@ -191,7 +191,7 @@ Queue only one bounded outcome at a time; these are proposed tasks, not dispatch
 6. **Restrained branding.** Done: an optional logo and an allowlisted palette of Django's own colour variables, adopted by extending one template. Title text stays the AdminSite's.
    - **Coverage.** Behavior tests on Django 5.2 and 6.0: not adopted means byte-identical pages, adopted leaves every page body unchanged, plus theme placement, validation, checks and the CSP nonce. Browser journeys cover stock widgets (actions, list_editable, inlines, Select2, date widgets, errors), our editor, buttons, filters and command pages, light/dark/auto, the toggle, narrow layouts, keyboard order, project overrides and missing parts.
    - **Not built.** No fonts, layout options, presets, per-user or per-site themes, or free-form CSS.
-7. **REPL spike, then a separate implementation decision.** Validate Ghostty transport and process lifecycle before offering a production-facing shell. Advanced query search remains a later bounded design task.
+7. **First release.** Wheel and sdist are checked, metadata-validated and clean-installed by the gate, and the lanes cover Python 3.12-3.14. Publishing is the owner's step ([RELEASING.md](RELEASING.md)). The former REPL spike wave is withdrawn from this package (see REPL above). Advanced query search remains a later bounded design task.
 
 For evolutionary work, use behavior-driven red/green/refactor and retain the existing repository gate. Add tests for plausible failure modes, not quotas or every helper. Use a few browser journeys for selection, layout, fallback and form ownership; do not replay the full rule matrix at every layer.
 
@@ -201,8 +201,7 @@ Need: repeated admin friction without replacing Django. Smallest API: ordinary M
 
 ## Open before relevant implementation
 
-- First consumer repository, its Python/Django versions, custom AdminSite/templates and existing runner.
+- The first consumer's custom AdminSite/templates, its existing runner, and a model, JSON field or button suited to the pilot. Its Python 3.14 and Django 5.2 are known and covered by the gate.
 - Resolved for v1: command runs are visible to their initiator only, with no list. Showing them to other admins would still need minimal metadata persistence and a new product decision.
-- REPL deployment/transport and target environment.
 
 The consumer questions gate the pilot, which is still pending. Do not invent the new application's architecture from this library plan.

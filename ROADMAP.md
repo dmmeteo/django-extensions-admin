@@ -19,9 +19,14 @@ done and are described in the [README](README.md).
 Both filter slices landed ahead of the consumer pilot, which remains the next outcome and
 may still reorder the rest.
 
-- **First consumer pilot** - install the wheel in the user's application, integrate one
-  button and one JSON field, and record the integration friction. This feedback may reorder
-  everything below.
+- **First release (0.1.0)** - the wheel and sdist are ready and checked by the gate;
+  publishing is the owner's step ([RELEASING.md](RELEASING.md)). Not on PyPI until an upload
+  succeeds.
+- **First consumer pilot** - still the next evidence-producing outcome: install the wheel in
+  the user's application, integrate one button and one JSON field, and record the
+  integration friction. The first known consumer (Python 3.14, Django 5.2) has no model,
+  JSON field or button suited to it yet, so the pilot waits for one; nothing is invented in
+  this repository to stand in for it. This feedback may reorder everything below.
 - **Command runner, next steps** - the minimal runner ships. It covers registered
   commands, Django forms and permissions, django-tasks-db on Django 5.2 and 6.0, and
   initiator-only status and output. Visibility to other admins, or a list of runs, would
@@ -53,6 +58,10 @@ may still reorder the rest.
 An action-form framework, changelist upload panels, a custom page builder, dependent
 selects, enhanced inlines, saved filter presets, schema-driven JSON forms, a JSON tree UI,
 an own task queue, an audit/versioning backend, and any admin redesign.
+
+A browser REPL, terminal or coding-agent chat is not a core feature either. If it is
+pursued, it is a separate, optional companion package evaluated on its own, so this package
+stays a lightweight toolkit and installing it never exposes execution.
 
 Each feature stays independent and additive. Nothing here should ever require a mandatory
 base class or replace the stock admin.

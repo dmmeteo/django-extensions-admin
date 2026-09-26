@@ -9,9 +9,6 @@ Tasks backend, which you install only if you use it.
 > **Independent project.** Inspired by the spirit of `django-extensions`, but not
 > official, not affiliated with it, and it does not depend on it.
 
-> **Release status.** Version 0.1.0 is prepared but **not yet published on PyPI**. Until the
-> first upload succeeds, install it from the repository.
-
 ## Philosophy
 
 **Ordinary Django, with repetitive work removed.**
@@ -23,10 +20,8 @@ experience come before breadth of features.
 
 ## Install
 
-Not on PyPI yet. Install from the repository:
-
 ```bash
-uv pip install "git+https://github.com/dmmeteo/django-extensions-admin"
+pip install django-extensions-admin
 ```
 
 Or build the wheel from a checkout:

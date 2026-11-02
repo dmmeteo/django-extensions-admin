@@ -1,0 +1,62 @@
+{
+  "captured": "2026-11-02T11:05:47+00:00",
+  "context": "demo project, generated data, demo accounts, Chromium headless 153.0.8010.12, viewport 1440x860, light and dark colour schemes, by scripts/capture_media.py",
+  "captions": [
+    "Buttons: a changelist button, beside Django's own tools",
+    "Buttons: a CSRF-protected POST, checked server-side",
+    "Filters: a numeric range in the stock sidebar",
+    "JSON widget: indented, highlighted, validated",
+    "Environment indicator: the name on every page, header unchanged",
+    "Tools panel: docks below the full-width header",
+    "REPL: a real Django shell in a server-owned PTY",
+    "Management commands from the shell: call_command, no new runner",
+    "Drag to resize: the PTY follows the terminal grid",
+    "Same process after navigating: variables and history kept"
+  ],
+  "assets": [
+    {
+      "path": "docs/media/panel-repl.png",
+      "theme": "light",
+      "body_background": "rgb(255, 255, 255)",
+      "sha256": "f44a7bd07272291130e478180f6c7438700fc0ec9ec32c52bc9d0b1f24a6e940",
+      "bytes": 130886
+    },
+    {
+      "path": "docs/media/features.gif",
+      "theme": "light",
+      "body_background": "rgb(255, 255, 255)",
+      "sha256": "2c7021561dd114b2a6f9a8d9f57ed053f34b3492be76e253b0af37572d8d1505",
+      "bytes": 562882
+    },
+    {
+      "path": "docs/media/panel-repl-dark.png",
+      "theme": "dark",
+      "body_background": "rgb(18, 18, 18)",
+      "sha256": "8065558ab621d5a44e39d61ecbfc88982a9cb212f33b205b3997e1fd1f349c6b",
+      "bytes": 132531
+    },
+    {
+      "path": "docs/media/features-dark.gif",
+      "theme": "dark",
+      "body_background": "rgb(18, 18, 18)",
+      "sha256": "0261253660ca361f4e9d5a2135227714222b07a9f22c740b593f61b73b5ad873",
+      "bytes": 596430
+    }
+  ],
+  "ui_sources": {
+    "packages/panel/src/django_extensions_admin/panel/static/django_extensions_admin/panel/panel.js": "73639053d488b9052d06077488c1356098a93515ff8eda5497c031b9bb73a09d",
+    "packages/panel/src/django_extensions_admin/panel/static/django_extensions_admin/panel/panel.css": "92aea25e398756f857ae71c25310e8f4eb53bc54558d0964e2785c6519f9f0e4",
+    "packages/panel/src/django_extensions_admin/panel/static/django_extensions_admin/panel/boot.js": "64ef31b28b413b06fc589cbd05f96a8da5a11bdc9ea6fc536cc3a5974a17e372",
+    "packages/panel/src/django_extensions_admin/panel/templates/django_extensions_admin/panel/panel.html": "0b3f28938b87f7dd46a10bdc9caac2a631dc80ec516bcd7f6f3d3cebe255e4ea",
+    "packages/panel/src/django_extensions_admin/panel/templates/django_extensions_admin/panel/toggle.html": "44285dd180869d04c72f010806c29bb601c22199c528f825794818a5a90f6451",
+    "packages/repl/src/django_extensions_admin/repl/static/django_extensions_admin/repl/repl.js": "622b737645174af8528632c49698a999225dab540515ec2ec92b069273b83efd",
+    "packages/repl/src/django_extensions_admin/repl/static/django_extensions_admin/repl/repl.css": "edac4ecbccaa0f56cc339f1f9d0b956dfcab595a5290518d96e9d12af1d799b3",
+    "packages/repl/src/django_extensions_admin/repl/templates/django_extensions_admin/repl/tool.html": "cd24a47ffd64bc2aa84505962eadd7044ef08afb262f9fe6a9935bb55153ff96",
+    "packages/environment/src/django_extensions_admin/environment/static/django_extensions_admin/environment/environment.css": "f5c6ed37fb0f32efcacfe4e015a4a69b049b717a78a0fdbf3bd3c55f592c5006",
+    "packages/environment/src/django_extensions_admin/environment/templates/django_extensions_admin/environment/indicator.html": "62acd1bb805e8edabcc9107fa3f0733f33d808af7d41fdaeb60e9364e3150a93",
+    "packages/buttons/src/django_extensions_admin/static/django_extensions_admin/buttons.css": "0fb33d3ecc9ddfd671f5be4837f0ce98ec989c68eb99201dcb6e9387f95702aa",
+    "packages/filters/src/django_extensions_admin/static/django_extensions_admin/filters.css": "8d3ace13e74b30489e585e344737fa57024b85c8aa28a2a70affa1799fa4f320",
+    "packages/jsonwidget/src/django_extensions_admin/static/django_extensions_admin/json-widget.css": "3743f5494736a7d26a84460c4038b80e5c857915eb2c36e82f378cf425d4265d",
+    "packages/jsonwidget/src/django_extensions_admin/static/django_extensions_admin/json-widget.js": "40fef5cc93dc380160788b6f346d571dd9e62b17473090bf991a260cc0dff42e"
+  }
+}

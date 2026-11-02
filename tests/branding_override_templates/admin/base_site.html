@@ -1,0 +1,7 @@
+{% extends "django_extensions_admin/branding/base_site.html" %}
+{# A project's own CSS, after the branding layer: the documented place for it. #}
+{% block extrastyle %}{{ block.super }}<style>
+html[data-theme="light"], :root { --header-bg: #4a2040; }
+html[data-theme="dark"] { --header-bg: #2a1024; }
+@media (prefers-color-scheme: dark) { :root { --header-bg: #2a1024; } }
+</style>{% endblock %}

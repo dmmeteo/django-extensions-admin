@@ -1,0 +1,9 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+Recursive extends: this layer sits between the project's own admin/base_site.html (if any)
+and the next one down, normally the stock one. Every block keeps block.super.
+{% endcomment %}
+{% load admin_ext_environment %}
+{% block extrastyle %}{{ block.super }}{% admin_ext_environment as environment %}{% if environment %}{% include "django_extensions_admin/environment/style.html" %}{% endif %}{% endblock %}
+{% block header %}{% admin_ext_environment as environment %}{% if environment.position == "top" %}{% include "django_extensions_admin/environment/indicator.html" %}{% endif %}{{ block.super }}{% endblock %}
+{% block extrabody %}{{ block.super }}{% admin_ext_environment as environment %}{% if environment.position == "bottom" and not is_popup %}{% include "django_extensions_admin/environment/indicator.html" %}{% endif %}{% endblock %}

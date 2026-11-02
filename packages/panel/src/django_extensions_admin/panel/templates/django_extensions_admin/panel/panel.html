@@ -1,0 +1,22 @@
+{% load static %}<aside id="admin-ext-panel" class="admin-ext-panel" data-side="{{ panel.side }}" aria-label="Tools" hidden>
+  <div class="admin-ext-panel-resize" data-panel-role="resize" role="separator" tabindex="0" aria-orientation="vertical"
+    aria-controls="admin-ext-panel" aria-label="Resize the tools panel"
+    title="Drag to resize. Arrow keys resize too; Home and End jump to the narrowest and widest."></div>
+  <div class="admin-ext-panel-header">
+    <div class="admin-ext-panel-tabs" role="tablist" aria-label="Tools">
+      {% for entry in panel.tools %}<button type="button" role="tab" id="admin-ext-panel-tab-{{ entry.tool.key }}" data-tool="{{ entry.tool.key }}"
+        aria-controls="admin-ext-panel-tool-{{ entry.tool.key }}" aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"{% if not forloop.first %} tabindex="-1"{% endif %}>{{ entry.tool.label }}</button>{% endfor %}
+    </div>
+    <div class="admin-ext-panel-actions">
+      <button type="button" data-panel-action="wide" aria-pressed="false">Full width</button>
+      <button type="button" data-panel-action="close">Close</button>
+    </div>
+  </div>
+  {% for entry in panel.tools %}<section id="admin-ext-panel-tool-{{ entry.tool.key }}" class="admin-ext-panel-tool" role="tabpanel"
+    data-tool="{{ entry.tool.key }}" aria-labelledby="admin-ext-panel-tab-{{ entry.tool.key }}"{% if not forloop.first %} hidden{% endif %}>
+    {% include entry.tool.template with tool=entry.context %}
+  </section>{% endfor %}
+</aside>
+<script src="{% static 'django_extensions_admin/panel/panel.js' %}"></script>
+{% for entry in panel.tools %}{% for src in entry.tool.js_modules %}<script type="module" src="{% static src %}"></script>
+{% endfor %}{% endfor %}

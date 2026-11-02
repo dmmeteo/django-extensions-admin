@@ -1,0 +1,9 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+Recursive extends, like the other page-wide layers: every block keeps block.super, so the
+header, user tools and theme toggle stay Django's own.
+{% endcomment %}
+{% load admin_ext_panel %}
+{% block extrahead %}{{ block.super }}{% admin_ext_panel_tools as panel %}{% if panel %}{% include "django_extensions_admin/panel/assets.html" %}{% endif %}{% endblock %}
+{% block userlinks %}{{ block.super }}{% admin_ext_panel_tools as panel %}{% if panel %}{% include "django_extensions_admin/panel/toggle.html" %}{% endif %}{% endblock %}
+{% block extrabody %}{{ block.super }}{% admin_ext_panel_tools as panel %}{% if panel %}{% include "django_extensions_admin/panel/panel.html" %}{% endif %}{% endblock %}

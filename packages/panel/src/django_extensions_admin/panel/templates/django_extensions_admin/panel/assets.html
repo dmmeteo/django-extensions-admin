@@ -1,0 +1,3 @@
+{% load static %}<link rel="stylesheet" href="{% static 'django_extensions_admin/panel/panel.css' %}">
+{% for entry in panel.tools %}{% for href in entry.tool.css %}<link rel="stylesheet" href="{% static href %}">
+{% endfor %}{% endfor %}<script src="{% static 'django_extensions_admin/panel/boot.js' %}" data-side="{{ panel.side }}"></script>

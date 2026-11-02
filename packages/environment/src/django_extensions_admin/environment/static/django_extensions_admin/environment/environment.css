@@ -1,0 +1,44 @@
+/* The accent line carries the colour; the badge carries the name at a readable size. */
+.admin-ext-environment {
+  position: relative;
+  z-index: 1001;
+  height: var(--admin-ext-env-height);
+  background: var(--admin-ext-env-color);
+}
+
+.admin-ext-environment[data-position="bottom"] {
+  position: fixed;
+  inset: auto 0 0 0;
+}
+
+.admin-ext-environment-name {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  overflow: hidden;
+  padding: 1px 10px 2px;
+  border-radius: 0 0 4px 4px;
+  background: var(--admin-ext-env-color);
+  color: var(--admin-ext-env-text);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.5px;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.admin-ext-environment[data-position="bottom"] .admin-ext-environment-name {
+  top: auto;
+  bottom: 100%;
+  border-radius: 4px 4px 0 0;
+}
+
+@media print {
+  .admin-ext-environment {
+    display: none;
+  }
+}

@@ -1,0 +1,15 @@
+/*
+ * The branding logo in the admin header. Loaded only by the branding template, and only
+ * when there is a logo. Without it the logo is still held to its height attribute.
+ * The palette is not here: it is the admin's own CSS variables, set by the template.
+ */
+.admin-ext-brand-logo {
+    display: block;
+    align-self: center;
+    flex: none;
+    height: 2rem;
+    width: auto;
+    max-width: min(12rem, 40vw);
+    object-fit: contain;
+    margin-inline-end: 12px;
+}

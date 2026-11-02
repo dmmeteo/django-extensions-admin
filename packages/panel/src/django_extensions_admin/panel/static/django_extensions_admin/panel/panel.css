@@ -1,0 +1,247 @@
+/* The header button sits beside Django's theme toggle and looks like it. */
+#user-tools .admin-ext-panel-toggle {
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  background: transparent;
+  vertical-align: middle;
+  margin-inline-start: 5px;
+}
+
+#user-tools .admin-ext-panel-toggle svg {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: var(--header-link-color);
+}
+
+#user-tools .admin-ext-panel-toggle .admin-ext-panel-icon[data-side="left"] {
+  transform: scaleX(-1);
+}
+
+#user-tools .admin-ext-panel-toggle:hover svg,
+#user-tools .admin-ext-panel-toggle[aria-expanded="true"] svg {
+  fill: var(--accent);
+}
+
+#user-tools .admin-ext-panel-toggle:focus-visible,
+#admin-ext-panel :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* panel.js reads the two minimums for keyboard steps and ARIA values, and sets
+   --admin-ext-panel-top to the bottom edge of Django's header. */
+:root {
+  --admin-ext-panel-min-width: 360px;
+  --admin-ext-panel-min-page: 400px;
+  --admin-ext-panel-width: clamp(
+    var(--admin-ext-panel-min-width),
+    var(--admin-ext-panel-preferred, min(48rem, 50vw)),
+    100vw - var(--admin-ext-panel-min-page)
+  );
+}
+
+html.admin-ext-panel-wide {
+  --admin-ext-panel-width: 100vw;
+}
+
+/* Docking needs room for the narrowest panel beside the narrowest page: 360px + 400px. A
+   narrower screen overlays the page instead, still resizable: it opens at its widest and always
+   leaves a strip of page and the handle on screen. */
+@media (width < 760px) {
+  :root {
+    --admin-ext-panel-min-width: 240px;
+    --admin-ext-panel-min-page: 32px;
+    --admin-ext-panel-width: clamp(
+      var(--admin-ext-panel-min-width),
+      var(--admin-ext-panel-preferred, 100vw),
+      100vw - var(--admin-ext-panel-min-page)
+    );
+  }
+}
+
+/* Only the page below Django's header makes room. The header itself keeps the full width,
+   its height and its own wrapping, so nothing here touches body, #container or #header, nor
+   the environment indicator's line above the header. */
+@media (width >= 760px) {
+  html.admin-ext-panel-docked:not(.admin-ext-panel-wide) #container > :not(#header, .admin-ext-environment) {
+    min-width: 0;
+    margin-right: var(--admin-ext-panel-width);
+    overflow-x: clip;
+  }
+
+  html.admin-ext-panel-left.admin-ext-panel-docked:not(.admin-ext-panel-wide)
+    #container
+    > :not(#header, .admin-ext-environment) {
+    margin-right: 0;
+    margin-left: var(--admin-ext-panel-width);
+  }
+
+  /* The admin's own single-column dashboard rules from responsive.css, while docked. */
+  html.admin-ext-panel-docked:not(.admin-ext-panel-wide) .dashboard #content {
+    width: auto;
+  }
+
+  html.admin-ext-panel-docked:not(.admin-ext-panel-wide) .colMS,
+  html.admin-ext-panel-docked:not(.admin-ext-panel-wide) .colSM {
+    margin: 0;
+  }
+
+  html.admin-ext-panel-docked:not(.admin-ext-panel-wide) #content-related,
+  html.admin-ext-panel-docked:not(.admin-ext-panel-wide) .colSM #content-related {
+    width: 100%;
+    margin: 0;
+  }
+}
+
+#admin-ext-panel {
+  position: fixed;
+  top: var(--admin-ext-panel-top, 0px);
+  right: 0;
+  bottom: var(--admin-ext-bottom-inset, 0px);
+  z-index: 1000;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: var(--admin-ext-panel-width);
+  background: var(--body-bg);
+  color: var(--body-fg);
+  border-left: 1px solid var(--hairline-color);
+  box-shadow: -2px 0 12px rgb(0 0 0 / 0.2);
+}
+
+#admin-ext-panel[data-side="left"] {
+  right: auto;
+  left: 0;
+  border-left: 0;
+  border-right: 1px solid var(--hairline-color);
+  box-shadow: 2px 0 12px rgb(0 0 0 / 0.2);
+}
+
+#admin-ext-panel[hidden] {
+  display: none;
+}
+
+#admin-ext-panel .admin-ext-panel-resize {
+  position: absolute;
+  inset: 0 auto 0 -6px;
+  z-index: 1;
+  width: 11px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+#admin-ext-panel[data-side="left"] .admin-ext-panel-resize {
+  inset: 0 -6px 0 auto;
+}
+
+#admin-ext-panel .admin-ext-panel-resize::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 5px;
+  height: 48px;
+  margin-top: -24px;
+  border-radius: 3px;
+  background: var(--body-quiet-color);
+  box-shadow: 0 0 0 1px var(--body-bg);
+}
+
+#admin-ext-panel .admin-ext-panel-resize:hover::before,
+#admin-ext-panel .admin-ext-panel-resize:focus-visible::before,
+html.admin-ext-panel-resizing #admin-ext-panel .admin-ext-panel-resize::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 4px;
+  width: 3px;
+  background: var(--primary);
+}
+
+#admin-ext-panel .admin-ext-panel-resize:hover::after,
+#admin-ext-panel .admin-ext-panel-resize:focus-visible::after,
+html.admin-ext-panel-resizing #admin-ext-panel .admin-ext-panel-resize::after {
+  background: var(--primary);
+}
+
+#admin-ext-panel .admin-ext-panel-resize:focus-visible {
+  outline-offset: -2px;
+}
+
+html.admin-ext-panel-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+html.admin-ext-panel-wide #admin-ext-panel .admin-ext-panel-resize {
+  display: none;
+}
+
+#admin-ext-panel .admin-ext-panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 6px 16px 0;
+  background: var(--darkened-bg);
+  border-bottom: 1px solid var(--hairline-color);
+}
+
+#admin-ext-panel .admin-ext-panel-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+#admin-ext-panel [role="tab"] {
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 4px 4px 0 0;
+  background: none;
+  color: var(--body-quiet-color);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+#admin-ext-panel [role="tab"][aria-selected="true"] {
+  margin-bottom: -1px;
+  border-color: var(--hairline-color);
+  background: var(--body-bg);
+  color: var(--body-fg);
+  font-weight: 600;
+}
+
+#admin-ext-panel .admin-ext-panel-actions {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+  padding-bottom: 6px;
+}
+
+#admin-ext-panel .admin-ext-panel-actions button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link-fg);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+#admin-ext-panel .admin-ext-panel-actions button:hover {
+  color: var(--link-hover-color);
+}
+
+#admin-ext-panel .admin-ext-panel-tool {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#admin-ext-panel .admin-ext-panel-tool[hidden] {
+  display: none;
+}

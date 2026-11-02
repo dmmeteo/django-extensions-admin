@@ -1,0 +1,68 @@
+name: CI
+
+# The part of scripts/verify.sh that runs reliably on a GitHub-hosted Linux runner: lint, the
+# nine wheels built from this checkout, the Django test matrix against those wheels and the
+# real-worker journeys. The artifact checks, isolated installs and the browser journeys stay in
+# scripts/verify.sh. Nothing here installs a django-extensions-admin distribution from PyPI.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: uvx ruff@0.14.14 check .
+      - run: uvx ruff@0.14.14 format --check .
+      - run: find src packages -name '*.js' -not -path '*/vendor/*' -exec node --check {} +
+
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The same lanes as scripts/verify.sh. Each installs the command-runner backend
+        # exactly as docs/commands.md documents it; 3.14 with 5.2 is the first known consumer.
+        include:
+          - django: "5.2.*"
+            python: "3.14"
+            tasks: "django-tasks-db[compat]==0.13.0"
+            optional: ""
+          - django: "5.2.*"
+            python: "3.12"
+            tasks: "django-tasks-db[compat]==0.13.0"
+            optional: "ipython==9.17.1"
+          - django: "6.0.*"
+            python: "3.13"
+            tasks: "django-tasks-db==0.13.0"
+            optional: "ipython==9.17.1 django-extensions==4.1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Build the nine wheels from this checkout
+        run: for project in . packages/*; do uv build --wheel --out-dir dist "$project"; done
+      - name: Install Django ${{ matrix.django }} on Python ${{ matrix.python }} and the wheels
+        run: |
+          uv venv --python "${{ matrix.python }}" .venv
+          uv pip install --python .venv/bin/python "django==${{ matrix.django }}" "${{ matrix.tasks }}" \
+            "channels==4.3.2" "daphne==4.2.3" ${{ matrix.optional }}
+          uv pip install --python .venv/bin/python --no-deps dist/*.whl
+      - name: Run the test suite against the installed wheels
+        env:
+          PYTHONPATH: .
+        run: .venv/bin/python tests/runtests.py tests
+      - name: Run the command runner against a real db_worker
+        env:
+          PYTHONPATH: .
+          DJANGO_SETTINGS_MODULE: worker_tests.settings
+        run: .venv/bin/python tests/runtests.py worker_tests

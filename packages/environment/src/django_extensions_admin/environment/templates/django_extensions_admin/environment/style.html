@@ -1,0 +1,2 @@
+{% load static %}<link rel="stylesheet" href="{% static 'django_extensions_admin/environment/environment.css' %}">
+<style{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}>:root{--admin-ext-env-color:{{ environment.color }};--admin-ext-env-text:{{ environment.text_color }};--admin-ext-env-height:{{ environment.height }}px;{% if environment.position == "bottom" %}--admin-ext-bottom-inset:{{ environment.height }}px;{% endif %}}</style>

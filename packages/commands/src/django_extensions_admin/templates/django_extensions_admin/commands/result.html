@@ -1,0 +1,60 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'django_extensions_admin/commands.css' %}">{% endblock %}
+
+{% block extrahead %}{{ block.super }}{% if refresh %}
+<meta http-equiv="refresh" content="{{ refresh }}">{% endif %}{% endblock %}
+
+{% block bodyclass %}{{ block.super }} admin-ext-commands admin-ext-command-result{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+&rsaquo; <a href="{{ index_url }}">{% translate 'Management commands' %}</a>
+&rsaquo; <a href="{{ launch_url }}">{{ title }}</a>
+&rsaquo; {% translate 'Result' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <div class="module admin-ext-command-summary">
+    <table>
+      <tbody>
+        <tr>
+          <th scope="row">{% translate 'Status' %}</th>
+          <td><strong class="admin-ext-command-status admin-ext-command-status--{{ state }}" data-state="{{ state }}">{{ state_label }}</strong></td>
+        </tr>
+        {% if enqueued_at %}<tr><th scope="row">{% translate 'Queued at' %}</th><td>{{ enqueued_at }}</td></tr>{% endif %}
+        {% if started_at %}<tr><th scope="row">{% translate 'Started at' %}</th><td>{{ started_at }}</td></tr>{% endif %}
+        {% if finished_at %}<tr><th scope="row">{% translate 'Finished at' %}</th><td>{{ finished_at }}</td></tr>{% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if stale %}<ul class="messagelist"><li class="warning">{{ stale }}</li></ul>{% endif %}
+  {% if reason %}<ul class="messagelist"><li class="warning">{{ reason }}</li></ul>{% endif %}
+  {% if error %}<p class="errornote">{{ error }}</p>{% endif %}
+
+  {% if stdout %}
+    <h2>{% translate 'Output' %}</h2>
+    <pre class="admin-ext-command-output" id="admin-ext-command-stdout">{{ stdout }}</pre>
+  {% endif %}
+  {% if stderr %}
+    <h2>{% translate 'Errors' %}</h2>
+    <pre class="admin-ext-command-output" id="admin-ext-command-stderr">{{ stderr }}</pre>
+  {% endif %}
+  {% if truncated %}
+    <p class="help">{% blocktranslate %}Output was cut after {{ limit }} characters.{% endblocktranslate %}</p>
+  {% endif %}
+  {% if state == "succeeded" and not stdout and not stderr %}
+    <p>{% translate 'The command printed nothing.' %}</p>
+  {% endif %}
+
+  <p class="admin-ext-command-links">
+    {% if state == "queued" or state == "running" %}<a href="{{ request.get_full_path }}">{% translate 'Refresh' %}</a> &middot; {% endif %}
+    <a href="{{ launch_url }}">{% translate 'Back to the command' %}</a>
+  </p>
+</div>
+{% endblock %}

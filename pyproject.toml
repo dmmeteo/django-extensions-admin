@@ -1,0 +1,86 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "django-extensions-admin"
+dynamic = ["version"]
+description = "Independent, additive utilities for the Django admin, each installed only when you choose it: buttons, a JSON field widget, list filters, a management-command runner, branding, an environment indicator and an opt-in REPL. Not affiliated with django-extensions."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "dmmeteo" }]
+keywords = ["django", "admin", "buttons", "json", "widget", "filters", "list_filter", "management commands", "tasks", "branding", "environment", "repl"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = ["Django>=5.2,<7"]
+
+# Each feature is its own small distribution in this repository (packages/<name>), so an
+# extra adds exactly that feature's files and dependencies. Exact pins: one release.
+[project.optional-dependencies]
+buttons = ["django-extensions-admin-buttons==0.1.0"]
+jsonwidget = ["django-extensions-admin-jsonwidget==0.1.0"]
+filters = ["django-extensions-admin-filters==0.1.0"]
+commands = ["django-extensions-admin-commands==0.1.0"]
+branding = ["django-extensions-admin-branding==0.1.0"]
+environment = ["django-extensions-admin-environment==0.1.0"]
+repl = ["django-extensions-admin-repl==0.1.0"]
+all = [
+    "django-extensions-admin-buttons==0.1.0",
+    "django-extensions-admin-jsonwidget==0.1.0",
+    "django-extensions-admin-filters==0.1.0",
+    "django-extensions-admin-commands==0.1.0",
+    "django-extensions-admin-branding==0.1.0",
+    "django-extensions-admin-environment==0.1.0",
+    "django-extensions-admin-repl==0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/dmmeteo/django-extensions-admin"
+Source = "https://github.com/dmmeteo/django-extensions-admin"
+Issues = "https://github.com/dmmeteo/django-extensions-admin/issues"
+
+[tool.hatch.version]
+path = "src/django_extensions_admin/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/django_extensions_admin"]
+
+[tool.hatch.build.targets.sdist]
+# Anchored: an unanchored "README.md" also matches spikes/*/README.md.
+include = ["/src/django_extensions_admin", "/README.md", "/ROADMAP.md", "/LICENSE"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [".venvs", "artifacts", "dist", "packages/repl/src/django_extensions_admin/repl/static"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "DJ", "S", "RUF"]
+# RUF012: Django's ModelAdmin/Meta options are plain class-level lists and dicts.
+ignore = ["S101", "RUF012"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["django_extensions_admin"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106", "S107", "S311"]
+"browser_tests/*" = ["S105", "S106", "S107", "S311"]
+"worker_tests/*" = ["S105", "S106", "S107", "S311"]
+"worker_tests/accounts/migrations/*" = ["E501", "S105", "S106", "S107", "S311"]
+"demo/*" = ["S105", "S106", "S107", "S311"]
+"demo/demoapp/migrations/*" = ["E501", "S105", "S106", "S107", "S311"]
+# Disposable evidence harness: it launches workers and probes as child processes.
+"spikes/*" = ["S105", "S603", "S607"]
+"spikes/*/spikeapp/migrations/*" = ["E501"]

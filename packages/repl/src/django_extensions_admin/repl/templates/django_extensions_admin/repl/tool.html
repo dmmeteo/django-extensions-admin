@@ -1,0 +1,23 @@
+{% load static %}<div id="admin-ext-repl" class="admin-ext-repl"
+  data-state-url="{% url 'admin_ext_repl:state' %}"
+  data-start-url="{% url 'admin_ext_repl:start' %}"
+  data-end-url="{% url 'admin_ext_repl:end' %}"
+  data-stream-path="{{ tool.stream_path }}"
+  data-ghostty-url="{% static 'django_extensions_admin/repl/vendor/ghostty-web/ghostty-web.js' %}"
+  data-wasm-url="{% static 'django_extensions_admin/repl/vendor/ghostty-web/ghostty-vt.wasm' %}">
+  {% csrf_token %}
+  <div class="admin-ext-repl-bar">
+    <span class="admin-ext-repl-state" data-role="state" data-state="none">Not started</span>
+    <span class="admin-ext-repl-meta" data-role="meta"></span>
+  </div>
+  <p class="admin-ext-repl-notice" data-role="notice" role="status" aria-live="polite"></p>
+  <div class="admin-ext-repl-launch" data-role="launch" hidden>
+    <label for="admin-ext-repl-backend">Interpreter</label>
+    <select id="admin-ext-repl-backend" data-role="backend"></select>
+    <button type="button" class="button default" data-action="start">Start session</button>
+  </div>
+  <div class="admin-ext-repl-screen" data-role="screen"></div>
+  <div class="admin-ext-repl-footer">
+    <button type="button" class="button admin-ext-repl-end" data-action="end" hidden>End session</button>
+  </div>
+</div>

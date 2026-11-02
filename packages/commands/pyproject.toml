@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "django-extensions-admin-commands"
+version = "0.1.0"
+description = "Launch an allow-list of management commands from the Django admin on Django Tasks. Part of django-extensions-admin."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "dmmeteo" }]
+keywords = ["django", "admin", "management commands", "tasks"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+# Exact pins: every distribution of one release is built and tested together.
+dependencies = ["django-extensions-admin==0.1.0"]
+
+[project.urls]
+Homepage = "https://github.com/dmmeteo/django-extensions-admin"
+Source = "https://github.com/dmmeteo/django-extensions-admin"
+Issues = "https://github.com/dmmeteo/django-extensions-admin/issues"
+
+# Installs into the shared django_extensions_admin package directory. No __init__.py at
+# that level: the core distribution owns it.
+[tool.hatch.build.targets.wheel]
+packages = ["src/django_extensions_admin"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/README.md", "/LICENSE"]

@@ -1,0 +1,7 @@
+{% extends "admin/change_list.html" %}
+{% comment %}
+Thin wrapper: the only changes are the extra object-tools entries and the separate
+action form, which must live outside #changelist-form.
+{% endcomment %}
+{% block object-tools-items %}{{ block.super }}{% include "django_extensions_admin/buttons/toolbar.html" %}{% endblock %}
+{% block content %}{{ block.super }}{% include "django_extensions_admin/buttons/action_form.html" %}{% endblock %}
